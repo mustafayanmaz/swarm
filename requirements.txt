@@ -1,19 +1,10 @@
 # ==================================================
-# PROJECT: Swarm UAV Simulation
+# PROJECT: Swarm UAV Simulation (Panda3D)
 # REQUIRED PYTHON VERSION: 3.10
 # ==================================================
 
 numpy==1.24.4
-scipy==1.10.1
-matplotlib==3.7.5
-
-opencv-python==4.9.0.80
-
-pybullet==3.2.6
-
-pygame==2.5.2
-
-transforms3d==0.4.1
-
-tqdm==4.66.2
 PyYAML==6.0.1
+Panda3D==1.10.14
+Pillow==10.2.0
+qrcode==7.4.2
