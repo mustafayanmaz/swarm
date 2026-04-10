@@ -438,6 +438,10 @@ class SwarmController:
     ):
         """
         Ajanı sürüden çıkar ve belirtilen renkli bölgeye indir.
+        1) Aktif listeden çıkar, kalan dronelar formasyon günceller
+        2) Ayrılan drone iniş bölgesinin üzerine gider
+        3) Alçalarak iniş yapar
+        4) Yere indikten sonra disarm olur
         """
         if agent_id not in self.active_agents:
             log.warning(f"[Drone {agent_id}] Aktif değil, çıkarılamaz!")
@@ -452,22 +456,23 @@ class SwarmController:
         self.active_agents.remove(agent_id)
         self.removed_agents.append(agent_id)
 
-        # Kalan dronelar formasyonu güncelle
-        await self.send_positions()
+        # Kalan dronelar formasyonu güncelle (streaming otomatik yapacak)
 
-        # Çıkan drone'u iniş bölgesine yönlendir
+        # Çıkan drone'u iniş bölgesinin üzerine yönlendir
         drone = self.drones[agent_id]
         hn, he = self.home_offsets[agent_id]
         local_n = landing_ne[0] - hn
         local_e = landing_ne[1] - he
 
-        # Önce iniş bölgesinin üzerine git
+        # 1) İniş bölgesinin üzerine git (mevcut irtifada)
+        log.info(f"[Drone {agent_id}] İniş bölgesine gidiyor...")
         await drone.offboard.set_position_ned(
             PositionNedYaw(local_n, local_e, -self.altitude, 0.0)
         )
-        await asyncio.sleep(8)
+        await asyncio.sleep(10)
 
-        # Offboard durdur ve iniş
+        # 2) Offboard durdur ve iniş komutu ver
+        log.info(f"[Drone {agent_id}] İniş başlıyor...")
         try:
             await drone.offboard.stop()
         except (OffboardError, Exception):
@@ -475,16 +480,26 @@ class SwarmController:
 
         await drone.action.land()
         log.info(f"[Drone {agent_id}] İniş komutu gönderildi.")
-        await asyncio.sleep(10)
 
+        # 3) Yere inmesini bekle (irtifaya göre)
+        wait_time = max(self.altitude / 1.5, 10)
+        await asyncio.sleep(wait_time)
+
+        # 4) Disarm
         try:
             await drone.action.disarm()
         except Exception:
             pass
-        log.info(f"[Drone {agent_id}] Disarm. Yerde bekliyor.")
+        log.info(f"[Drone {agent_id}] Yere indi ve disarm oldu.")
 
     async def add_agent(self, agent_id: int):
-        """Yerdeki ajanı tekrar sürüye ekle."""
+        """
+        Yerdeki ajanı tekrar sürüye ekle.
+        1) Arm + offboard başlat
+        2) Sürü irtifasına yüksel
+        3) Aktif listeye ekle (streaming otomatik formasyon pozisyonunu gönderir)
+        4) Formasyon pozisyonuna gitmesini bekle
+        """
         if agent_id not in self.removed_agents:
             log.warning(f"[Drone {agent_id}] Çıkarılmış listesinde değil!")
             return
@@ -493,29 +508,34 @@ class SwarmController:
 
         drone = self.drones[agent_id]
 
+        # Home offset güncelle (iniş yaptığı yeni konumdan kalktığı için)
+        await self._update_home_offset(agent_id)
+
         # Arm
+        log.info(f"[Drone {agent_id}] Arm...")
         await drone.action.arm()
         await asyncio.sleep(1)
 
-        # Home offset güncelle (yeni konamdan kalktığı için)
-        await self._update_home_offset(agent_id)
-
-        # Offboard başlat — mevcut konumun üzerinde
-        await drone.offboard.set_position_ned(
-            PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
-        )
+        # Offboard başlat — önce birkaç setpoint gönder
+        initial = PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
+        await drone.offboard.set_position_ned(initial)
+        await asyncio.sleep(0.1)
+        await drone.offboard.set_position_ned(initial)
+        log.info(f"[Drone {agent_id}] Offboard başlatılıyor...")
         await drone.offboard.start()
-        log.info(f"[Drone {agent_id}] Kalkış...")
+
+        # Yükselmeyi bekle
+        log.info(f"[Drone {agent_id}] Kalkış... ({self.altitude}m)")
         await asyncio.sleep(self.altitude / 2 + 3)
 
-        # Aktif listeye ekle
+        # Aktif listeye ekle — streaming artık bu drone'a formasyon pozisyonu gönderecek
         self.removed_agents.remove(agent_id)
         self.active_agents.append(agent_id)
         self.active_agents.sort()
+        log.info(f"[Drone {agent_id}] Aktif listeye eklendi, formasyon pozisyonuna gidiyor...")
 
-        # Formasyon güncelle
-        await self.send_positions()
-        await asyncio.sleep(8)
+        # Formasyon pozisyonuna yerleşmesini bekle
+        await asyncio.sleep(10)
         log.info(f"[Drone {agent_id}] Sürüye geri katıldı.")
 
     # ─── YARDIMCI ─────────────────────────────────────────────
