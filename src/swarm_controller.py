@@ -511,13 +511,13 @@ class SwarmController:
 
         drone = self.drones[agent_id]
 
-        # Home offset güncelle (iniş yaptığı yeni konumdan kalktığı için)
-        await self._update_home_offset(agent_id)
-
         # Arm
         log.info(f"[Drone {agent_id}] Arm...")
         await drone.action.arm()
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
+
+        # Home offset güncelle (arm sonrası PX4 yeni home'u set eder)
+        await self._update_home_offset(agent_id)
 
         # Offboard başlat — önce birkaç setpoint gönder
         initial = PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
