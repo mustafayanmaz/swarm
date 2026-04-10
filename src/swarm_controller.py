@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mavsdk import System
 from mavsdk.offboard import OffboardError, PositionNedYaw
+from mavsdk.telemetry import LandedState
 
 from src.formations import (
     apply_pitch_offsets,
@@ -479,18 +480,20 @@ class SwarmController:
             pass
 
         await drone.action.land()
-        log.info(f"[Drone {agent_id}] İniş komutu gönderildi.")
+        log.info(f"[Drone {agent_id}] İniş komutu gönderildi, yere inmesi bekleniyor...")
 
-        # 3) Yere inmesini bekle (irtifaya göre)
-        wait_time = max(self.altitude / 1.5, 10)
-        await asyncio.sleep(wait_time)
+        # 3) Telemetriden yere indiğini doğrula
+        async for state in drone.telemetry.landed_state():
+            if state == LandedState.ON_GROUND:
+                break
+        log.info(f"[Drone {agent_id}] Yere indi (telemetri onaylandı).")
 
         # 4) Disarm
         try:
             await drone.action.disarm()
         except Exception:
             pass
-        log.info(f"[Drone {agent_id}] Yere indi ve disarm oldu.")
+        log.info(f"[Drone {agent_id}] Disarm oldu.")
 
     async def add_agent(self, agent_id: int):
         """
@@ -524,9 +527,17 @@ class SwarmController:
         log.info(f"[Drone {agent_id}] Offboard başlatılıyor...")
         await drone.offboard.start()
 
-        # Yükselmeyi bekle
+        # Yükselmeyi bekle — telemetriden irtifayı kontrol et
         log.info(f"[Drone {agent_id}] Kalkış... ({self.altitude}m)")
-        await asyncio.sleep(self.altitude / 2 + 3)
+        target_alt = self.altitude * 0.85  # %85'ine ulaşınca devam
+        for _ in range(120):  # max 60 saniye
+            async for pos in drone.telemetry.position():
+                rel_alt = pos.relative_altitude_m
+                break
+            if rel_alt >= target_alt:
+                break
+            await asyncio.sleep(0.5)
+        log.info(f"[Drone {agent_id}] İrtifaya ulaştı ({rel_alt:.1f}m).")
 
         # Aktif listeye ekle — streaming artık bu drone'a formasyon pozisyonu gönderecek
         self.removed_agents.remove(agent_id)
