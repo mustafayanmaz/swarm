@@ -160,11 +160,12 @@ class SwarmController:
     async def send_positions(self):
         """Aktif tüm drone'lara güncel formasyon pozisyonlarını gönder."""
         targets = self._get_global_targets()
-        tasks = []
         for aid, (n, e, d, yaw) in targets.items():
-            local = self._to_local_ned(aid, n, e, d, yaw)
-            tasks.append(self.drones[aid].offboard.set_position_ned(local))
-        await asyncio.gather(*tasks)
+            try:
+                local = self._to_local_ned(aid, n, e, d, yaw)
+                await self.drones[aid].offboard.set_position_ned(local)
+            except Exception as ex:
+                log.debug(f"[Drone {aid}] setpoint hatası: {ex}")
 
     async def _stream_loop(self):
         """Arka planda 10Hz setpoint gönder (PX4 offboard timeout'u önler)."""
@@ -552,14 +553,27 @@ class SwarmController:
             await asyncio.sleep(0.3)
         log.info(f"[Drone {agent_id}] İrtifaya ulaştı ({rel_alt:.1f}m).")
 
-        # Aktif listeye ekle — streaming artık bu drone'a formasyon pozisyonu gönderecek
+        # Aktif listeye ekle
         self.removed_agents.remove(agent_id)
         self.active_agents.append(agent_id)
         self.active_agents.sort()
         log.info(f"[Drone {agent_id}] Aktif listeye eklendi, formasyon pozisyonuna gidiyor...")
 
-        # Formasyon pozisyonuna yerleşmesini bekle
-        await asyncio.sleep(10)
+        # Formasyon pozisyonuna açıkça yönlendir (streaming'e güvenmiyoruz)
+        for i in range(150):  # 15 saniye, 10Hz
+            targets = self._get_global_targets()
+            if agent_id in targets:
+                n, e, d, yaw = targets[agent_id]
+                local = self._to_local_ned(agent_id, n, e, d, yaw)
+                await drone.offboard.set_position_ned(local)
+                if i == 0:
+                    log.info(
+                        f"[Drone {agent_id}] Hedef: "
+                        f"N={n:.1f} E={e:.1f} D={d:.1f} → "
+                        f"local=({local.north_m:.1f}, {local.east_m:.1f})"
+                    )
+            await asyncio.sleep(0.1)
+
         log.info(f"[Drone {agent_id}] Sürüye geri katıldı.")
 
     # ─── YARDIMCI ─────────────────────────────────────────────
