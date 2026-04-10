@@ -1,0 +1,43 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Gazebo generated (regenerate with: python generate_arena.py)
+gazebo/textures/
+gazebo/worlds/
+
+# PX4 build artifacts (inside submodule, but just in case)
+PX4-Autopilot/build/
+
+# QGroundControl
+*.AppImage
+
+# Misc
+*.bak
+*.backup
+
+# Gazebo models (generated)
+gazebo/models/

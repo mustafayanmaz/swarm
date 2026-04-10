@@ -1,0 +1,481 @@
+"""
+TEKNOFEST 2026 Sürü İHA - Ana Sürü Kontrolcüsü
+
+Tüm droneların bağlantı, formasyon, navigasyon, manevra
+ve ajan ekleme/çıkarma işlemlerini yönetir.
+"""
+import asyncio
+import logging
+import math
+from typing import Dict, List, Optional, Tuple
+
+from mavsdk import System
+from mavsdk.offboard import OffboardError, PositionNedYaw
+
+from formations import (
+    apply_pitch_offsets,
+    apply_roll_offsets,
+    compute_heading,
+    get_formation_offsets,
+    rotate_offsets,
+)
+from config import HOME_POSITION
+
+log = logging.getLogger("swarm")
+
+
+class SwarmController:
+    """3+ drone'u formasyon halinde kontrol eden ana sınıf."""
+
+    def __init__(self):
+        self.drones: Dict[int, System] = {}
+        self.home_offsets: Dict[int, Tuple[float, float]] = {}
+        self.ref_home_gps: Optional[Tuple[float, float]] = None
+        self.active_agents: List[int] = []
+        self.removed_agents: List[int] = []
+
+        # Formasyon durumu
+        self.formation_type: str = "line"
+        self.formation_distance: float = 5.0
+        self.formation_heading: float = 0.0  # radyan, 0=Kuzey
+
+        # Sürü durumu
+        self.swarm_center: Tuple[float, float] = (0.0, 0.0)  # NED (N, E)
+        self.altitude: float = 15.0
+
+        # Manevra durumu
+        self.pitch_angle: float = 0.0
+        self.roll_angle: float = 0.0
+
+    # ─── BAĞLANTI ─────────────────────────────────────────────
+
+    async def connect(self, ports: List[str], grpc_base_port: int = 50040):
+        """Tüm drone'lara bağlan."""
+        for i, port in enumerate(ports):
+            log.info(f"[Drone {i}] Bağlanıyor ({port})...")
+            drone = System(port=grpc_base_port + i)
+            await drone.connect(system_address=port)
+
+            async for state in drone.core.connection_state():
+                if state.is_connected:
+                    log.info(f"[Drone {i}] Bağlandı!")
+                    break
+
+            self.drones[i] = drone
+            self.active_agents.append(i)
+
+        await self._read_home_positions()
+        log.info(f"{len(self.drones)} drone bağlandı.")
+
+    async def _read_home_positions(self):
+        """GPS home pozisyonlarını oku, NED offset'lerini hesapla."""
+        homes = {}
+        for did, drone in self.drones.items():
+            async for home in drone.telemetry.home():
+                homes[did] = (home.latitude_deg, home.longitude_deg)
+                log.info(
+                    f"[Drone {did}] Home GPS: "
+                    f"{home.latitude_deg:.7f}, {home.longitude_deg:.7f}"
+                )
+                break
+
+        # Drone 0 referans noktası
+        self.ref_home_gps = homes[0]
+        ref_lat, ref_lon = self.ref_home_gps
+
+        for did, (lat, lon) in homes.items():
+            north = (lat - ref_lat) * 111320.0
+            east = (lon - ref_lon) * 111320.0 * math.cos(math.radians(ref_lat))
+            self.home_offsets[did] = (north, east)
+            log.info(f"[Drone {did}] Home NED offset: N={north:.2f}m E={east:.2f}m")
+
+    async def _update_home_offset(self, drone_id: int):
+        """Tek bir drone'un home offset'ini yeniden hesapla (iniş sonrası)."""
+        ref_lat, ref_lon = self.ref_home_gps
+        async for home in self.drones[drone_id].telemetry.home():
+            north = (home.latitude_deg - ref_lat) * 111320.0
+            east = (
+                (home.longitude_deg - ref_lon)
+                * 111320.0
+                * math.cos(math.radians(ref_lat))
+            )
+            self.home_offsets[drone_id] = (north, east)
+            log.info(
+                f"[Drone {drone_id}] Home offset güncellendi: "
+                f"N={north:.2f}m E={east:.2f}m"
+            )
+            break
+
+    # ─── POZİSYON HESAPLAMA ──────────────────────────────────
+
+    def _get_global_targets(self) -> Dict[int, Tuple[float, float, float, float]]:
+        """
+        Aktif ajanlar için global NED hedef pozisyonları hesapla.
+        Returns: {agent_id: (north, east, down, yaw_deg)}
+        """
+        body_offsets = get_formation_offsets(
+            self.formation_type,
+            len(self.active_agents),
+            self.formation_distance,
+            self.active_agents,
+        )
+        ned_offsets = rotate_offsets(body_offsets, self.formation_heading)
+
+        pitch_alt = apply_pitch_offsets(body_offsets, self.pitch_angle)
+        roll_alt = apply_roll_offsets(body_offsets, self.roll_angle)
+
+        yaw_deg = math.degrees(self.formation_heading)
+        targets = {}
+
+        for aid in self.active_agents:
+            n_off, e_off = ned_offsets[aid]
+            alt_off = pitch_alt.get(aid, 0.0) + roll_alt.get(aid, 0.0)
+
+            targets[aid] = (
+                self.swarm_center[0] + n_off,
+                self.swarm_center[1] + e_off,
+                -(self.altitude - alt_off),  # NED down: negatif = yukarı
+                yaw_deg,
+            )
+
+        return targets
+
+    def _to_local_ned(
+        self, drone_id: int, gn: float, ge: float, gd: float, yaw: float
+    ) -> PositionNedYaw:
+        """Global NED → drone'un lokal NED frame'ine çevir."""
+        hn, he = self.home_offsets[drone_id]
+        return PositionNedYaw(gn - hn, ge - he, gd, yaw)
+
+    async def send_positions(self):
+        """Aktif tüm drone'lara güncel formasyon pozisyonlarını gönder."""
+        targets = self._get_global_targets()
+        tasks = []
+        for aid, (n, e, d, yaw) in targets.items():
+            local = self._to_local_ned(aid, n, e, d, yaw)
+            tasks.append(self.drones[aid].offboard.set_position_ned(local))
+        await asyncio.gather(*tasks)
+
+    # ─── KALKIŞ / İNİŞ ───────────────────────────────────────
+
+    async def takeoff(self, altitude: float = None):
+        """Tüm drone'ları arm edip formasyon halinde kalkır."""
+        if altitude:
+            self.altitude = altitude
+
+        # Sürü merkezi: home pozisyonlarının ortalaması
+        if self.home_offsets:
+            vals = list(self.home_offsets.values())
+            self.swarm_center = (
+                sum(v[0] for v in vals) / len(vals),
+                sum(v[1] for v in vals) / len(vals),
+            )
+
+        log.info(
+            f"KALKIŞ → İrtifa: {self.altitude}m, "
+            f"Formasyon: {self.formation_type}, "
+            f"Merkez: N={self.swarm_center[0]:.1f} E={self.swarm_center[1]:.1f}"
+        )
+
+        async def start_single(did):
+            drone = self.drones[did]
+            # Offboard başlatmadan önce bir setpoint gerekli
+            await drone.offboard.set_position_ned(
+                PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
+            )
+            log.info(f"[Drone {did}] Arm...")
+            await drone.action.arm()
+            log.info(f"[Drone {did}] Offboard başlatılıyor...")
+            await drone.offboard.start()
+            log.info(f"[Drone {did}] Kalkış!")
+
+        await asyncio.gather(*[start_single(d) for d in self.active_agents])
+        log.info("Tüm dronelar kalkışta! Yükselme bekleniyor...")
+        await asyncio.sleep(self.altitude / 2 + 3)
+
+        # Formasyon pozisyonlarına geç
+        await self.send_positions()
+        log.info("Formasyon pozisyonları gönderildi.")
+        await asyncio.sleep(8)
+        log.info("Kalkış tamamlandı, formasyon hazır.")
+
+    async def land_all(self):
+        """Tüm aktif drone'ları indir ve disarm et."""
+        log.info("Tüm dronelar iniyor...")
+
+        for aid in list(self.active_agents):
+            try:
+                await self.drones[aid].offboard.stop()
+            except (OffboardError, Exception):
+                pass
+            await self.drones[aid].action.land()
+            log.info(f"[Drone {aid}] İniş komutu gönderildi.")
+
+        await asyncio.sleep(12)
+
+        for aid in list(self.active_agents):
+            try:
+                await self.drones[aid].action.disarm()
+                log.info(f"[Drone {aid}] Disarm edildi.")
+            except Exception:
+                pass
+
+        log.info("Tüm dronelar indi.")
+
+    # ─── NAVİGASYON ──────────────────────────────────────────
+
+    async def move_to(
+        self, target_ne: Tuple[float, float], speed: float = 3.0
+    ):
+        """
+        Sürü merkezini hedefe taşı.
+        Formasyon rotasyonu + interpolasyonlu hareket.
+        """
+        start = self.swarm_center
+        dist = math.hypot(target_ne[0] - start[0], target_ne[1] - start[1])
+
+        if dist < 0.5:
+            return
+
+        # Formasyon rotasyonu: hedefe doğru heading
+        new_heading = compute_heading(start, target_ne)
+        await self._rotate_heading(new_heading)
+
+        # İnterpolasyonlu hareket
+        duration = dist / speed
+        steps = max(int(duration * 4), 10)
+        dt = duration / steps
+
+        log.info(
+            f"Hareket → ({target_ne[0]:.1f}, {target_ne[1]:.1f}), "
+            f"mesafe: {dist:.1f}m, süre: {duration:.1f}s"
+        )
+
+        for i in range(1, steps + 1):
+            t = i / steps
+            self.swarm_center = (
+                start[0] + t * (target_ne[0] - start[0]),
+                start[1] + t * (target_ne[1] - start[1]),
+            )
+            await self.send_positions()
+            await asyncio.sleep(dt)
+
+        await asyncio.sleep(2)
+        log.info(f"Hedefe varıldı: ({target_ne[0]:.1f}, {target_ne[1]:.1f})")
+
+    async def _rotate_heading(self, target_heading: float, duration: float = 3.0):
+        """Formasyon heading'ini yumuşak şekilde döndür."""
+        start_heading = self.formation_heading
+        diff = target_heading - start_heading
+
+        # En kısa yoldan dön
+        while diff > math.pi:
+            diff -= 2 * math.pi
+        while diff < -math.pi:
+            diff += 2 * math.pi
+
+        if abs(diff) < 0.05:
+            return
+
+        steps = 20
+        dt = duration / steps
+        log.info(
+            f"Formasyon rotasyonu: "
+            f"{math.degrees(start_heading):.0f}° → "
+            f"{math.degrees(target_heading):.0f}°"
+        )
+
+        for i in range(1, steps + 1):
+            t = i / steps
+            self.formation_heading = start_heading + diff * t
+            await self.send_positions()
+            await asyncio.sleep(dt)
+
+        await asyncio.sleep(1)
+
+    async def return_home(self, speed: float = 3.0):
+        """Home konumuna dön ve iniş yap."""
+        log.info("═══ EVE DÖNÜŞ ═══")
+        await self.move_to(HOME_POSITION, speed)
+        await self.land_all()
+
+    # ─── FORMASYON ────────────────────────────────────────────
+
+    async def change_formation(
+        self, formation_type: str, distance: float = None
+    ):
+        """Formasyon tipini değiştir."""
+        self.formation_type = formation_type
+        if distance is not None:
+            self.formation_distance = distance
+
+        log.info(
+            f"Formasyon değişikliği → {formation_type}, "
+            f"mesafe: {self.formation_distance}m"
+        )
+        await self.send_positions()
+        await asyncio.sleep(6)
+        log.info("Formasyon değişikliği tamamlandı.")
+
+    # ─── İRTİFA ───────────────────────────────────────────────
+
+    async def change_altitude(self, new_altitude: float):
+        """Sürü irtifasını değiştir (yumuşak geçiş)."""
+        log.info(f"İrtifa değişikliği: {self.altitude:.0f}m → {new_altitude:.0f}m")
+
+
+        start_alt = self.altitude
+        steps = max(int(abs(new_altitude - start_alt) * 2), 10)
+
+        for i in range(1, steps + 1):
+            t = i / steps
+            self.altitude = start_alt + t * (new_altitude - start_alt)
+            await self.send_positions()
+            await asyncio.sleep(0.25)
+
+        await asyncio.sleep(3)
+        log.info(f"İrtifa: {self.altitude:.0f}m")
+
+    # ─── MANEVRALAR ───────────────────────────────────────────
+
+    async def pitch_maneuver(self, angle_deg: float, hold: float = 5.0):
+        """
+        Pitch manevrası: sürü merkezi sabit, forward ekseninde eğim.
+        Pozitif açı = öne eğilme (liderin irtifası düşer).
+        """
+        log.info(f"Pitch manevrası: {angle_deg}°")
+
+        # Yavaşça açıya ulaş
+        steps = 20
+        for i in range(1, steps + 1):
+            self.pitch_angle = angle_deg * (i / steps)
+            await self.send_positions()
+            await asyncio.sleep(0.15)
+
+        await asyncio.sleep(hold)
+
+        # Düze dön
+        for i in range(steps, -1, -1):
+            self.pitch_angle = angle_deg * (i / steps)
+            await self.send_positions()
+            await asyncio.sleep(0.15)
+
+        self.pitch_angle = 0.0
+        log.info("Pitch manevrası tamamlandı.")
+
+    async def roll_maneuver(self, angle_deg: float, hold: float = 5.0):
+        """
+        Roll manevrası: sürü merkezi sabit, sağ/sol ekseninde eğim.
+        Pozitif açı = sağa yatış (sağ kanat alçalır).
+        """
+        log.info(f"Roll manevrası: {angle_deg}°")
+
+        steps = 20
+        for i in range(1, steps + 1):
+            self.roll_angle = angle_deg * (i / steps)
+            await self.send_positions()
+            await asyncio.sleep(0.15)
+
+        await asyncio.sleep(hold)
+
+        for i in range(steps, -1, -1):
+            self.roll_angle = angle_deg * (i / steps)
+            await self.send_positions()
+            await asyncio.sleep(0.15)
+
+        self.roll_angle = 0.0
+        log.info("Roll manevrası tamamlandı.")
+
+    # ─── AJAN EKLEME / ÇIKARMA ────────────────────────────────
+
+    async def remove_agent(
+        self, agent_id: int, landing_ne: Tuple[float, float]
+    ):
+        """
+        Ajanı sürüden çıkar ve belirtilen renkli bölgeye indir.
+        """
+        if agent_id not in self.active_agents:
+            log.warning(f"[Drone {agent_id}] Aktif değil, çıkarılamaz!")
+            return
+
+        log.info(
+            f"[Drone {agent_id}] Sürüden çıkarılıyor → "
+            f"İniş: ({landing_ne[0]:.1f}, {landing_ne[1]:.1f})"
+        )
+
+        # Aktif listeden çıkar
+        self.active_agents.remove(agent_id)
+        self.removed_agents.append(agent_id)
+
+        # Kalan dronelar formasyonu güncelle
+        await self.send_positions()
+
+        # Çıkan drone'u iniş bölgesine yönlendir
+        drone = self.drones[agent_id]
+        hn, he = self.home_offsets[agent_id]
+        local_n = landing_ne[0] - hn
+        local_e = landing_ne[1] - he
+
+        # Önce iniş bölgesinin üzerine git
+        await drone.offboard.set_position_ned(
+            PositionNedYaw(local_n, local_e, -self.altitude, 0.0)
+        )
+        await asyncio.sleep(8)
+
+        # Offboard durdur ve iniş
+        try:
+            await drone.offboard.stop()
+        except (OffboardError, Exception):
+            pass
+
+        await drone.action.land()
+        log.info(f"[Drone {agent_id}] İniş komutu gönderildi.")
+        await asyncio.sleep(10)
+
+        try:
+            await drone.action.disarm()
+        except Exception:
+            pass
+        log.info(f"[Drone {agent_id}] Disarm. Yerde bekliyor.")
+
+    async def add_agent(self, agent_id: int):
+        """Yerdeki ajanı tekrar sürüye ekle."""
+        if agent_id not in self.removed_agents:
+            log.warning(f"[Drone {agent_id}] Çıkarılmış listesinde değil!")
+            return
+
+        log.info(f"[Drone {agent_id}] Sürüye geri ekleniyor...")
+
+        drone = self.drones[agent_id]
+
+        # Arm
+        await drone.action.arm()
+        await asyncio.sleep(1)
+
+        # Home offset güncelle (yeni konamdan kalktığı için)
+        await self._update_home_offset(agent_id)
+
+        # Offboard başlat — mevcut konumun üzerinde
+        await drone.offboard.set_position_ned(
+            PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
+        )
+        await drone.offboard.start()
+        log.info(f"[Drone {agent_id}] Kalkış...")
+        await asyncio.sleep(self.altitude / 2 + 3)
+
+        # Aktif listeye ekle
+        self.removed_agents.remove(agent_id)
+        self.active_agents.append(agent_id)
+        self.active_agents.sort()
+
+        # Formasyon güncelle
+        await self.send_positions()
+        await asyncio.sleep(8)
+        log.info(f"[Drone {agent_id}] Sürüye geri katıldı.")
+
+    # ─── YARDIMCI ─────────────────────────────────────────────
+
+    async def hold(self, seconds: float):
+        """Mevcut pozisyonda bekle."""
+        log.info(f"Pozisyon tutma: {seconds:.0f}s")
+        await asyncio.sleep(seconds)
