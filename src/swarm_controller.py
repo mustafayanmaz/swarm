@@ -497,10 +497,9 @@ class SwarmController:
     async def add_agent(self, agent_id: int):
         """
         Yerdeki ajanı tekrar sürüye ekle.
-        1) Arm
-        2) GPS'ten gerçek home offset hesapla
-        3) Offboard başlat + sürekli setpoint ile yüksel
-        4) Aktif listeye ekle (streaming formasyon pozisyonunu gönderir)
+        PX4 EKF local frame disarm/re-arm sonrası SIFIRLANMIYOR.
+        home_offsets DEĞİŞMEZ — orijinal değerler korunur.
+        Kalkış komutu iniş bölgesinin local NED karşılığıyla gönderilir.
         """
         if agent_id not in self.removed_agents:
             log.warning(f"[Drone {agent_id}] Çıkarılmış listesinde değil!")
@@ -510,39 +509,35 @@ class SwarmController:
 
         drone = self.drones[agent_id]
 
+        # home_offsets DEĞİŞMİYOR — PX4 EKF origin aynı kalıyor
+        # İniş bölgesi NED → drone'un local NED frame'inde hesapla
+        landing_ne = self._landing_positions[agent_id]
+        hn, he = self.home_offsets[agent_id]  # ORİJİNAL offset
+        local_land_n = landing_ne[0] - hn
+        local_land_e = landing_ne[1] - he
+        log.info(
+            f"[Drone {agent_id}] Orijinal home offset: N={hn:.2f} E={he:.2f}, "
+            f"İniş bölgesi NED: ({landing_ne[0]:.1f}, {landing_ne[1]:.1f}), "
+            f"Local: ({local_land_n:.1f}, {local_land_e:.1f})"
+        )
+
         # Arm
         log.info(f"[Drone {agent_id}] Arm...")
         await drone.action.arm()
         await asyncio.sleep(2)
 
-        # Home offset: drone'un GERÇEK GPS konumunu oku ve NED'e çevir
-        # PX4 arm sırasında home'u mevcut GPS'e set eder
-        ref_lat, ref_lon = self.ref_home_gps
-        async for pos in drone.telemetry.position():
-            north = (pos.latitude_deg - ref_lat) * 111320.0
-            east = (
-                (pos.longitude_deg - ref_lon)
-                * 111320.0
-                * math.cos(math.radians(ref_lat))
-            )
-            self.home_offsets[agent_id] = (north, east)
-            log.info(
-                f"[Drone {agent_id}] GPS home offset: "
-                f"N={north:.2f}m E={east:.2f}m"
-            )
-            break
-
-        # Offboard başlat — önce birkaç setpoint gönder
-        climb_cmd = PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
+        # Offboard başlat — iniş bölgesi ÜSTÜNDE yüksel (orijinal local NED frame)
+        climb_cmd = PositionNedYaw(local_land_n, local_land_e, -self.altitude, 0.0)
         await drone.offboard.set_position_ned(climb_cmd)
         await asyncio.sleep(0.1)
         await drone.offboard.set_position_ned(climb_cmd)
         log.info(f"[Drone {agent_id}] Offboard başlatılıyor...")
         await drone.offboard.start()
 
-        # Yükselme — SÜREKLİ setpoint gönder (PX4 offboard timeout'u önle)
+        # Yükselme — SÜREKLİ setpoint gönder
         log.info(f"[Drone {agent_id}] Kalkış... ({self.altitude}m)")
         target_alt = self.altitude * 0.85
+        rel_alt = 0.0
         for _ in range(200):  # max ~60s
             await drone.offboard.set_position_ned(climb_cmd)
             async for pos in drone.telemetry.position():
@@ -559,7 +554,7 @@ class SwarmController:
         self.active_agents.sort()
         log.info(f"[Drone {agent_id}] Aktif listeye eklendi, formasyon pozisyonuna gidiyor...")
 
-        # Formasyon pozisyonuna açıkça yönlendir (streaming'e güvenmiyoruz)
+        # Formasyon pozisyonuna açıkça yönlendir
         for i in range(150):  # 15 saniye, 10Hz
             targets = self._get_global_targets()
             if agent_id in targets:
