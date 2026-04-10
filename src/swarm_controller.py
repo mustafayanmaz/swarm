@@ -38,6 +38,7 @@ class SwarmController:
         self.ref_home_gps: Optional[Tuple[float, float]] = None
         self.active_agents: List[int] = []
         self.removed_agents: List[int] = []
+        self._landing_positions: Dict[int, Tuple[float, float]] = {}
 
         # Formasyon durumu
         self.formation_type: str = "line"
@@ -457,6 +458,9 @@ class SwarmController:
         self.active_agents.remove(agent_id)
         self.removed_agents.append(agent_id)
 
+        # İniş bölgesinin NED koordinatını kaydet (add_agent'ta kullanılacak)
+        self._landing_positions[agent_id] = landing_ne
+
         # Kalan dronelar formasyonu güncelle (streaming otomatik yapacak)
 
         # Çıkan drone'u iniş bölgesinin üzerine yönlendir
@@ -516,8 +520,14 @@ class SwarmController:
         await drone.action.arm()
         await asyncio.sleep(2)
 
-        # Home offset güncelle (arm sonrası PX4 yeni home'u set eder)
-        await self._update_home_offset(agent_id)
+        # Home offset = iniş bölgesinin NED koordinatı (PX4 home'u buraya set etti)
+        landing_ne = self._landing_positions.get(agent_id)
+        if landing_ne:
+            self.home_offsets[agent_id] = landing_ne
+            log.info(
+                f"[Drone {agent_id}] Home offset = iniş bölgesi: "
+                f"N={landing_ne[0]:.2f}m E={landing_ne[1]:.2f}m"
+            )
 
         # Offboard başlat — önce birkaç setpoint gönder
         initial = PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
