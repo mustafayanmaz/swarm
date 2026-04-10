@@ -10,7 +10,7 @@ PX4_DIR="$REPO_DIR/PX4-Autopilot"
 ROOTFS="$PX4_DIR/build/px4_sitl_default/rootfs"
 PX4_BIN="$PX4_DIR/build/px4_sitl_default/bin/px4"
 NUM_DRONES=3
-MODEL="gz_x500"
+MODEL="gz_x500_mono_cam_down"
 
 # Drone başlangıç pozisyonları (x,y,z,roll,pitch,yaw)
 # Gazebo ENU: X=East, Y=North → Y boyunca diziyoruz (North ekseni)
@@ -123,9 +123,9 @@ for i in $(seq 0 $((NUM_DRONES - 1))); do
 
     # PX4 binary rootfs dizininden çalıştırılmalı
     cd "$ROOTFS"
-    PX4_SYS_AUTOSTART=4001 \
+    PX4_SYS_AUTOSTART=4014 \
     PX4_GZ_MODEL_POSE="$POSE" \
-    PX4_GZ_MODEL=x500 \
+    PX4_GZ_MODEL=x500_mono_cam_down \
     PX4_SIM_MODEL="$MODEL" \
     PX4_INSTANCE=$i \
     GZ_SIM_RESOURCE_PATH="$GZ_SIM_RESOURCE_PATH" \
