@@ -440,10 +440,6 @@ class SwarmController:
     ):
         """
         Ajanı sürüden çıkar ve belirtilen renkli bölgeye indir.
-        1) Aktif listeden çıkar, kalan dronelar formasyon günceller
-        2) Ayrılan drone iniş bölgesinin üzerine gider
-        3) Alçalarak iniş yapar
-        4) Yere indikten sonra disarm olur
         """
         if agent_id not in self.active_agents:
             log.warning(f"[Drone {agent_id}] Aktif değil, çıkarılamaz!")
@@ -458,23 +454,21 @@ class SwarmController:
         self.active_agents.remove(agent_id)
         self.removed_agents.append(agent_id)
 
-        # İniş bölgesinin NED koordinatını kaydet (add_agent'ta kullanılacak)
+        # İniş NED koordinatını kaydet (add_agent'ta kullanılacak)
         self._landing_positions[agent_id] = landing_ne
-
-        # Kalan dronelar formasyonu güncelle (streaming otomatik yapacak)
 
         # Çıkan drone'u iniş bölgesinin üzerine yönlendir
         drone = self.drones[agent_id]
         hn, he = self.home_offsets[agent_id]
-        local_n = landing_ne[0] - hn
-        local_e = landing_ne[1] - he
-
-        # 1) İniş bölgesinin üzerine git (mevcut irtifada)
-        log.info(f"[Drone {agent_id}] İniş bölgesine gidiyor...")
-        await drone.offboard.set_position_ned(
-            PositionNedYaw(local_n, local_e, -self.altitude, 0.0)
+        landing_cmd = PositionNedYaw(
+            landing_ne[0] - hn, landing_ne[1] - he, -self.altitude, 0.0
         )
-        await asyncio.sleep(10)
+
+        # 1) İniş bölgesine git — SÜREKLİ setpoint gönder (10Hz, 10s)
+        log.info(f"[Drone {agent_id}] İniş bölgesine gidiyor...")
+        for _ in range(100):
+            await drone.offboard.set_position_ned(landing_cmd)
+            await asyncio.sleep(0.1)
 
         # 2) Offboard durdur ve iniş komutu ver
         log.info(f"[Drone {agent_id}] İniş başlıyor...")
@@ -502,10 +496,10 @@ class SwarmController:
     async def add_agent(self, agent_id: int):
         """
         Yerdeki ajanı tekrar sürüye ekle.
-        1) Arm + offboard başlat
-        2) Sürü irtifasına yüksel
-        3) Aktif listeye ekle (streaming otomatik formasyon pozisyonunu gönderir)
-        4) Formasyon pozisyonuna gitmesini bekle
+        1) Arm
+        2) GPS'ten gerçek home offset hesapla
+        3) Offboard başlat + sürekli setpoint ile yüksel
+        4) Aktif listeye ekle (streaming formasyon pozisyonunu gönderir)
         """
         if agent_id not in self.removed_agents:
             log.warning(f"[Drone {agent_id}] Çıkarılmış listesinde değil!")
@@ -520,33 +514,42 @@ class SwarmController:
         await drone.action.arm()
         await asyncio.sleep(2)
 
-        # Home offset = iniş bölgesinin NED koordinatı (PX4 home'u buraya set etti)
-        landing_ne = self._landing_positions.get(agent_id)
-        if landing_ne:
-            self.home_offsets[agent_id] = landing_ne
-            log.info(
-                f"[Drone {agent_id}] Home offset = iniş bölgesi: "
-                f"N={landing_ne[0]:.2f}m E={landing_ne[1]:.2f}m"
+        # Home offset: drone'un GERÇEK GPS konumunu oku ve NED'e çevir
+        # PX4 arm sırasında home'u mevcut GPS'e set eder
+        ref_lat, ref_lon = self.ref_home_gps
+        async for pos in drone.telemetry.position():
+            north = (pos.latitude_deg - ref_lat) * 111320.0
+            east = (
+                (pos.longitude_deg - ref_lon)
+                * 111320.0
+                * math.cos(math.radians(ref_lat))
             )
+            self.home_offsets[agent_id] = (north, east)
+            log.info(
+                f"[Drone {agent_id}] GPS home offset: "
+                f"N={north:.2f}m E={east:.2f}m"
+            )
+            break
 
         # Offboard başlat — önce birkaç setpoint gönder
-        initial = PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
-        await drone.offboard.set_position_ned(initial)
+        climb_cmd = PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
+        await drone.offboard.set_position_ned(climb_cmd)
         await asyncio.sleep(0.1)
-        await drone.offboard.set_position_ned(initial)
+        await drone.offboard.set_position_ned(climb_cmd)
         log.info(f"[Drone {agent_id}] Offboard başlatılıyor...")
         await drone.offboard.start()
 
-        # Yükselmeyi bekle — telemetriden irtifayı kontrol et
+        # Yükselme — SÜREKLİ setpoint gönder (PX4 offboard timeout'u önle)
         log.info(f"[Drone {agent_id}] Kalkış... ({self.altitude}m)")
-        target_alt = self.altitude * 0.85  # %85'ine ulaşınca devam
-        for _ in range(120):  # max 60 saniye
+        target_alt = self.altitude * 0.85
+        for _ in range(200):  # max ~60s
+            await drone.offboard.set_position_ned(climb_cmd)
             async for pos in drone.telemetry.position():
                 rel_alt = pos.relative_altitude_m
                 break
             if rel_alt >= target_alt:
                 break
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)
         log.info(f"[Drone {agent_id}] İrtifaya ulaştı ({rel_alt:.1f}m).")
 
         # Aktif listeye ekle — streaming artık bu drone'a formasyon pozisyonu gönderecek
