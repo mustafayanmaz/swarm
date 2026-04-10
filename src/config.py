@@ -22,10 +22,12 @@ QR_POSITIONS = {
     6: (-25.0, 30.0),     # Gazebo (x=30.0, y=-25.0)
 }
 
-# --- Renkli İniş Bölgeleri (rota üzerinde tespit edilecek, şimdilik bilinen konumlar) ---
+# --- Renkli İniş Bölgeleri (rota üzerinde, kamera ile tespit edilecek) ---
+# NED koordinatları; Gazebo ENU → NED: North=GazeboY, East=GazeboX
+# Mavi: rota 1→4 orta noktası, Kırmızı: rota 4→2 orta noktası
 LANDING_ZONES = {
-    "kirmizi": (-12.0, 35.0),  # Gazebo (x=35.0, y=-12.0)
-    "mavi": (12.0, 35.0),      # Gazebo (x=35.0, y=12.0)
+    "kirmizi": (12.5, 30.0),   # Gazebo (x=30.0, y=12.5)
+    "mavi": (0.0, 30.0),       # Gazebo (x=30.0, y=0.0)
 }
 
 # --- Başlangıç / Home Konumu ---

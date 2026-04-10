@@ -35,9 +35,14 @@ for i, qr_id in enumerate(hex_order):
     y = CENTER[1] + HEXAGON_RADIUS * math.sin(angle)
     QR_POS[qr_id] = (round(x, 2), round(y, 2))
 
+# Renkli alanlar rota üzerinde (dronelar üstünden geçecek)
+# Rota: 1→4→2→3→5→6
+# Mavi: segment 1→4 orta noktası,  Kırmızı: segment 4→2 orta noktası
+_seg_1_4_mid = ((QR_POS[1][0] + QR_POS[4][0]) / 2, (QR_POS[1][1] + QR_POS[4][1]) / 2)
+_seg_4_2_mid = ((QR_POS[4][0] + QR_POS[2][0]) / 2, (QR_POS[4][1] + QR_POS[2][1]) / 2)
 LANDING_ZONES = {
-    "blue": (CENTER[0] + 5.0, CENTER[1] + 12.0),
-    "red": (CENTER[0] + 5.0, CENTER[1] - 12.0),
+    "blue": _seg_1_4_mid,
+    "red": _seg_4_2_mid,
 }
 
 QR_SIZE = 1.2
@@ -74,7 +79,7 @@ def qr_model(qr_id, x, y):
 
 
 def zone_model(name, x, y, r, g, b):
-    sz = 3.0
+    sz = QR_SIZE
     color_name = "blue" if b > 0.5 else "red"
     tex = os.path.join(TEXTURE_DIR, f"zone_{color_name}.png")
     return f"""
@@ -178,8 +183,19 @@ def generate_qr_pngs():
         img.save(path)
         print(f"  ✓ QR{qr_id} PNG → {path}")
 
+def generate_zone_pngs():
+    """Kırmızı ve mavi renkli alan PNG'leri üret."""
+    ZN_PX = 512
+    for color_name, rgb in [("blue", (30, 80, 240)), ("red", (230, 40, 40))]:
+        img = Image.new("RGB", (ZN_PX, ZN_PX), rgb)
+        path = os.path.join(TEXTURE_DIR, f"zone_{color_name}.png")
+        img.save(path)
+        print(f"  ✓ {color_name} zone PNG → {path}")
+
 print("=== QR Kod PNG'leri (şartname formatı) ===")
 generate_qr_pngs()
+print("=== Renkli Alan PNG'leri ===")
+generate_zone_pngs()
 
 
 # ─── World SDF ──────────────────────────────────────────────
