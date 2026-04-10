@@ -7,7 +7,11 @@ ve ajan ekleme/çıkarma işlemlerini yönetir.
 import asyncio
 import logging
 import math
+import os
+import sys
 from typing import Dict, List, Optional, Tuple
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mavsdk import System
 from mavsdk.offboard import OffboardError, PositionNedYaw
@@ -46,6 +50,10 @@ class SwarmController:
         # Manevra durumu
         self.pitch_angle: float = 0.0
         self.roll_angle: float = 0.0
+
+        # Arka plan setpoint stream
+        self._streaming: bool = False
+        self._stream_task: Optional[asyncio.Task] = None
 
     # ─── BAĞLANTI ─────────────────────────────────────────────
 
@@ -156,6 +164,33 @@ class SwarmController:
             tasks.append(self.drones[aid].offboard.set_position_ned(local))
         await asyncio.gather(*tasks)
 
+    async def _stream_loop(self):
+        """Arka planda 10Hz setpoint gönder (PX4 offboard timeout'u önler)."""
+        while self._streaming:
+            try:
+                await self.send_positions()
+            except Exception:
+                pass
+            await asyncio.sleep(0.1)
+
+    def start_streaming(self):
+        """Arka plan setpoint stream'i başlat."""
+        if not self._streaming:
+            self._streaming = True
+            self._stream_task = asyncio.ensure_future(self._stream_loop())
+            log.info("Setpoint streaming başlatıldı (10Hz)")
+
+    async def stop_streaming(self):
+        """Arka plan setpoint stream'i durdur."""
+        self._streaming = False
+        if self._stream_task:
+            try:
+                await self._stream_task
+            except Exception:
+                pass
+            self._stream_task = None
+            log.info("Setpoint streaming durduruldu")
+
     # ─── KALKIŞ / İNİŞ ───────────────────────────────────────
 
     async def takeoff(self, altitude: float = None):
@@ -177,20 +212,27 @@ class SwarmController:
             f"Merkez: N={self.swarm_center[0]:.1f} E={self.swarm_center[1]:.1f}"
         )
 
-        async def start_single(did):
+        # Drone'ları sırayla başlat (paralel başlatma setpoint kaybına yol açıyor)
+        for did in self.active_agents:
             drone = self.drones[did]
-            # Offboard başlatmadan önce bir setpoint gerekli
-            await drone.offboard.set_position_ned(
-                PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
-            )
+            initial = PositionNedYaw(0.0, 0.0, -self.altitude, 0.0)
+            # Birden fazla setpoint gönder
+            await drone.offboard.set_position_ned(initial)
+            await asyncio.sleep(0.1)
+            await drone.offboard.set_position_ned(initial)
             log.info(f"[Drone {did}] Arm...")
             await drone.action.arm()
+            await drone.offboard.set_position_ned(initial)
+            await asyncio.sleep(0.1)
+            await drone.offboard.set_position_ned(initial)
             log.info(f"[Drone {did}] Offboard başlatılıyor...")
             await drone.offboard.start()
             log.info(f"[Drone {did}] Kalkış!")
 
-        await asyncio.gather(*[start_single(d) for d in self.active_agents])
         log.info("Tüm dronelar kalkışta! Yükselme bekleniyor...")
+
+        # Hemen streaming başlat — PX4 sürekli setpoint bekliyor
+        self.start_streaming()
         await asyncio.sleep(self.altitude / 2 + 3)
 
         # Formasyon pozisyonlarına geç
@@ -202,6 +244,9 @@ class SwarmController:
     async def land_all(self):
         """Tüm aktif drone'ları indir ve disarm et."""
         log.info("Tüm dronelar iniyor...")
+
+        # Streaming durdur
+        await self.stop_streaming()
 
         for aid in list(self.active_agents):
             try:

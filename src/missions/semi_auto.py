@@ -6,9 +6,12 @@ Tek klavye/joystick ile sürüyü yönlendirme.
 import asyncio
 import logging
 import math
+import os
 import sys
 import termios
 import tty
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.config import DEFAULT_ALTITUDE, DEFAULT_AGENT_DISTANCE
 from src.swarm_controller import SwarmController
