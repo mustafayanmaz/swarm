@@ -10,6 +10,15 @@ TEAM_ID = 1  # Hakemler tarafından söylenen takım ID'si
 DRONE_PORTS = [f"udp://:1454{i}" for i in range(NUM_DRONES)]
 GRPC_BASE_PORT = 50040
 
+# --- Drone Spawn Pozisyonları (Gazebo ENU: x,y) ---
+# launch_sim.sh ile aynı: x=East, y=North
+# NED'e çevrim: North=y, East=x
+DRONE_SPAWNS_NED = {
+    0: (0.0, 0.0),
+    1: (3.0, 0.0),
+    2: (6.0, 0.0),
+}
+
 # --- QR Kod Pozisyonları (yarışma öncesi hakemler tarafından paylaşılacak) ---
 # NED: (North, East) metre cinsinden home'a göre
 # NOT: Gazebo ENU kullanır → NED North = Gazebo Y, NED East = Gazebo X
@@ -35,22 +44,22 @@ HOME_POSITION = (0.0, 0.0)
 FIRST_QR = 1  # İlk gidilecek QR
 
 # --- Uçuş Parametreleri ---
-DEFAULT_ALTITUDE = 15.0       # metre (hakemler belirleyecek)
-DEFAULT_AGENT_DISTANCE = 5.0  # metre (ajanlar arası)
+DEFAULT_ALTITUDE = 8.0        # metre (QR okunabilmesi için max 8m)
+DEFAULT_AGENT_DISTANCE = 5.0  # metre (ajanlar arası, hakemler belirler)
 CRUISE_SPEED = 3.0            # m/s
 
 # --- Formasyon Tip Eşleştirme (QR'daki Türkçe → kod) ---
+# Şartname Şekil 3: Ok Başı, V, Çizgi
 FORMATION_MAP = {
     "OKBASI": "arrow",
-    "CIZGI": "line",
     "V": "v",
-    "UCGEN": "triangle",
+    "CIZGI": "line",
 }
 DEFAULT_FORMATION = "line"
 
 # --- QR İçerikleri (Şekil 2 — şartname formatı, her QR'da gömülü) ---
-# Simülasyonda QR okuma yerine bu sözlükten çekilecek.
 # Gerçek yarışmada kamera ile QR okunup aynı format parse edilecek.
+# Format: şartname Şekil 2 ile birebir aynı
 QR_CONTENTS = {
     1: {
         "qr_id": 1,
@@ -58,16 +67,15 @@ QR_CONTENTS = {
             "formasyon": {
                 "aktif": True,
                 "tip": "OKBASI",
-                "mesafe": 6.0,
             },
             "manevra_pitch_roll": {
                 "aktif": False,
-                "pitch_deg": 0,
-                "roll_deg": 0,
+                "pitch_deg": "0",
+                "roll_deg": "0",
             },
             "irtifa_degisim": {
                 "aktif": True,
-                "deger": 20,
+                "deger": 8,
             },
             "bekleme_suresi_s": 3,
         },
@@ -89,12 +97,11 @@ QR_CONTENTS = {
             "formasyon": {
                 "aktif": False,
                 "tip": None,
-                "mesafe": None,
             },
             "manevra_pitch_roll": {
                 "aktif": True,
-                "pitch_deg": -15,
-                "roll_deg": 0,
+                "pitch_deg": "-10",
+                "roll_deg": "0",
             },
             "irtifa_degisim": {
                 "aktif": False,
@@ -120,16 +127,15 @@ QR_CONTENTS = {
             "formasyon": {
                 "aktif": True,
                 "tip": "CIZGI",
-                "mesafe": 5.0,
             },
             "manevra_pitch_roll": {
                 "aktif": False,
-                "pitch_deg": 0,
-                "roll_deg": 0,
+                "pitch_deg": "0",
+                "roll_deg": "0",
             },
             "irtifa_degisim": {
                 "aktif": True,
-                "deger": 15,
+                "deger": 8,
             },
             "bekleme_suresi_s": 5,
         },
@@ -151,12 +157,11 @@ QR_CONTENTS = {
             "formasyon": {
                 "aktif": True,
                 "tip": "V",
-                "mesafe": 6.0,
             },
             "manevra_pitch_roll": {
                 "aktif": True,
-                "pitch_deg": 0,
-                "roll_deg": 15,
+                "pitch_deg": "0",
+                "roll_deg": "10",
             },
             "irtifa_degisim": {
                 "aktif": False,
@@ -182,16 +187,15 @@ QR_CONTENTS = {
             "formasyon": {
                 "aktif": False,
                 "tip": None,
-                "mesafe": None,
             },
             "manevra_pitch_roll": {
                 "aktif": False,
-                "pitch_deg": 0,
-                "roll_deg": 0,
+                "pitch_deg": "0",
+                "roll_deg": "0",
             },
             "irtifa_degisim": {
                 "aktif": True,
-                "deger": 10,
+                "deger": 8,
             },
             "bekleme_suresi_s": 2,
         },
@@ -213,12 +217,11 @@ QR_CONTENTS = {
             "formasyon": {
                 "aktif": False,
                 "tip": None,
-                "mesafe": None,
             },
             "manevra_pitch_roll": {
                 "aktif": False,
-                "pitch_deg": 0,
-                "roll_deg": 0,
+                "pitch_deg": "0",
+                "roll_deg": "0",
             },
             "irtifa_degisim": {
                 "aktif": False,

@@ -7,6 +7,12 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PX4_DIR="$REPO_DIR/PX4-Autopilot"
+
+# NVIDIA GPU kullan (Intel iGPU yerine)
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export __VK_LAYER_NV_optimus=NVIDIA_only
+
 ROOTFS="$PX4_DIR/build/px4_sitl_default/rootfs"
 PX4_BIN="$PX4_DIR/build/px4_sitl_default/bin/px4"
 NUM_DRONES=3

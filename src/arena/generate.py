@@ -61,11 +61,14 @@ def qr_model(qr_id, x, y):
             <box><size>{s} {s} 0.02</size></box>
           </geometry>
           <material>
+            <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <specular>0.1 0.1 0.1 1</specular>
+            <specular>0 0 0 1</specular>
             <pbr>
               <metal>
                 <albedo_map>{tex}</albedo_map>
+                <metalness>0.0</metalness>
+                <roughness>1.0</roughness>
               </metal>
             </pbr>
           </material>
@@ -167,11 +170,11 @@ def make_lines():
 # ─── QR Kod PNG Üretimi (config.py'deki QR_CONTENTS'tan) ───
 def generate_qr_pngs():
     """Her QR için şartname formatında JSON içerikli PNG üret."""
-    QR_PX = 512
+    QR_PX = 2048  # Gazebo texture filtering blur'ı azaltmak için yüksek çözünürlük
     for qr_id, content in QR_CONTENTS.items():
         data = json.dumps(content, ensure_ascii=False, separators=(",", ":"))
         qr = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
             box_size=10,
             border=4,
         )
@@ -181,7 +184,7 @@ def generate_qr_pngs():
         img = img.resize((QR_PX, QR_PX), Image.NEAREST)
         path = os.path.join(TEXTURE_DIR, f"qr{qr_id}.png")
         img.save(path)
-        print(f"  ✓ QR{qr_id} PNG → {path}")
+        print(f"  ✓ QR{qr_id} PNG → {path} ({QR_PX}x{QR_PX})")
 
 def generate_zone_pngs():
     """Kırmızı ve mavi renkli alan PNG'leri üret."""

@@ -12,11 +12,15 @@ from pyzbar.pyzbar import decode as pyzbar_decode
 log = logging.getLogger("swarm.detection")
 
 
-def detect_qr(frame) -> dict | None:
+_debug_counter = 0
+
+
+def detect_qr(frame, save_debug: bool = False) -> dict | None:
     """
     Frame'den QR kod oku ve JSON olarak parse et.
     Returns: QR içeriği dict veya None
     """
+    global _debug_counter
     if frame is None:
         return None
 
@@ -26,18 +30,58 @@ def detect_qr(frame) -> dict | None:
     else:
         gray = frame
 
-    # Kontrast artır (SITL kameradan gelen görüntü zayıf olabiliyor)
-    gray = cv2.equalizeHist(gray)
+    # Upscale 3x — QR modülleri çok küçük olabiliyor (yüksek irtifa)
+    h, w = gray.shape[:2]
+    upscaled = cv2.resize(gray, (w * 3, h * 3), interpolation=cv2.INTER_CUBIC)
 
-    results = pyzbar_decode(gray)
-    for r in results:
-        try:
-            data = r.data.decode("utf-8")
-            content = json.loads(data)
-            log.info(f"QR tespit edildi: qr_id={content.get('qr_id')}")
-            return content
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            log.warning(f"QR parse hatası: {e}")
+    # Debug: her 20 denemede frame kaydet
+    if save_debug and _debug_counter % 20 == 0:
+        cv2.imwrite(f"/tmp/qr_debug_raw_{_debug_counter}.png", gray)
+        cv2.imwrite(f"/tmp/qr_debug_upscaled_{_debug_counter}.png", upscaled)
+        log.info(f"  🔍 Debug frame kaydedildi: /tmp/qr_debug_*_{_debug_counter}.png")
+    _debug_counter += 1
+
+    # Birden fazla yöntem dene
+    methods = []
+
+    # Yöntem 1: Sadece upscale (Gazebo render zaten siyah/beyaz)
+    methods.append(upscaled)
+
+    # Yöntem 2: Upscale + OTSU threshold
+    _, otsu = cv2.threshold(upscaled, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    methods.append(otsu)
+
+    # Yöntem 3: Upscale + sharpen
+    sharp_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    sharpened = cv2.filter2D(upscaled, -1, sharp_kernel)
+    methods.append(sharpened)
+
+    # Yöntem 4: Orijinal (upscale yok)
+    methods.append(gray)
+
+    for i, img in enumerate(methods):
+        # pyzbar
+        results = pyzbar_decode(img)
+        for r in results:
+            try:
+                data = r.data.decode("utf-8")
+                content = json.loads(data)
+                log.info(f"QR tespit edildi: qr_id={content.get('qr_id')} (pyzbar, yöntem {i})")
+                return content
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                log.warning(f"QR parse hatası: {e}")
+
+        # OpenCV QRCodeDetector (pyzbar bulamazsa)
+        detector = cv2.QRCodeDetector()
+        val, pts, straight = detector.detectAndDecode(img)
+        if val:
+            try:
+                content = json.loads(val)
+                log.info(f"QR tespit edildi: qr_id={content.get('qr_id')} (opencv, yöntem {i})")
+                return content
+            except (json.JSONDecodeError, ValueError) as e:
+                log.warning(f"QR parse hatası (opencv): {e}")
+
     return None
 
 

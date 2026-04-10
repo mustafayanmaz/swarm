@@ -5,7 +5,6 @@ Desteklenen formasyonlar:
   - arrow (ok başı): Lider önde, kanatlar arkada
   - line (çizgi): Yan yana dizilim
   - v: V formasyonu
-  - triangle (üçgen): Eşkenar üçgen
 
 Koordinat sistemi (body frame):
   forward = formasyonun baktığı yön
@@ -25,7 +24,7 @@ def get_formation_offsets(
     Her ajan için body frame'de (forward, right) offset hesapla.
 
     Args:
-        formation_type: "arrow", "line", "v", "triangle"
+        formation_type: "arrow", "line", "v"
         num_agents: Aktif ajan sayısı
         distance: Ajanlar arası mesafe (metre)
         agent_ids: Ajan ID listesi (None ise 0..num_agents-1)
@@ -76,18 +75,6 @@ def get_formation_offsets(
                 -row * distance * 0.4,
                 side * row * distance * 0.5,
             )
-
-    elif formation_type == "triangle":
-        # Eşkenar üçgen
-        h = distance * math.sqrt(3) / 2
-        if n >= 1:
-            offsets[agent_ids[0]] = (h / 3 * 2, 0.0)
-        if n >= 2:
-            offsets[agent_ids[1]] = (-h / 3, -distance * 0.5)
-        if n >= 3:
-            offsets[agent_ids[2]] = (-h / 3, distance * 0.5)
-        for i in range(3, n):
-            offsets[agent_ids[i]] = (0.0, (i - 2) * distance)
 
     else:
         return get_formation_offsets("line", num_agents, distance, agent_ids)

@@ -10,14 +10,17 @@ Akış:
   6. sonraki_qr[team_id] → bir sonraki QR'a git
   7. sonraki_qr == 0 → eve dön, iniş
 """
+# PROTOBUF UYUMLULUĞU: gz-msgs + MAVSDK birlikte çalışması için
+# TÜM import'lardan ÖNCE set edilmeli
+import os
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+
 import asyncio
 import logging
-import os
 import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
 from src.config import (
     DEFAULT_ALTITUDE,
@@ -39,37 +42,68 @@ from src.detection import detect_qr, detect_color_zone
 log = logging.getLogger("swarm")
 
 
-def read_qr_from_camera(cameras: SwarmCameras, timeout: float = 10.0) -> dict | None:
+def read_qr_from_camera(cameras, timeout: float = 10.0) -> dict | None:
     """
-    Kameradan QR kod oku. Lider drone (0) kamerasını kullanır.
-    timeout saniye boyunca dener, bulamazsa None döner.
+    TÜM drone kameralarından QR kod oku.
+    Sürü merkezinde olan drone QR'ın üstünde olmayabilir (formasyon offset),
+    bu yüzden tüm kameraları tarayarak en yakın olanı bulsun.
     """
+    num = cameras.num_drones
     start = time.time()
     while time.time() - start < timeout:
-        frame = cameras.get_frame(0)  # Lider drone kamerası
-        if frame is not None:
-            content = detect_qr(frame)
-            if content is not None:
-                return content
+        for cam_id in range(num):
+            frame = cameras.get_frame(cam_id)
+            if frame is not None:
+                content = detect_qr(frame, save_debug=(cam_id == 0))
+                if content is not None:
+                    log.info(f"    (Drone {cam_id} kamerasından okundu)")
+                    return content
         time.sleep(0.1)
     return None
 
 
-def read_qr(qr_id: int, cameras: SwarmCameras = None) -> dict:
+QR_READ_ALTITUDE = 8.0   # İlk okuma denemesi irtifası
+QR_READ_ALTITUDE_2 = 5.0  # İlk başarısız olursa daha da alçal
+
+
+async def read_qr(qr_id: int, ctrl: SwarmController, cameras=None) -> dict:
     """
     QR kod içeriğini oku.
-    1. Kameradan oku (cameras varsa)
-    2. Kameradan okunamazsa config fallback
+    1. Mevcut irtifadan dene (3s)
+    2. 8m'ye in, dene (5s)
+    3. 5m'ye in, dene (5s)
+    4. Görev irtifasına geri çık
+    5. Okunamazsa config fallback
     """
     log.info(f"  📷 QR{qr_id} okunuyor...")
 
-    # Kameradan dene
+    mission_alt = ctrl.altitude
+
     if cameras is not None:
-        content = read_qr_from_camera(cameras, timeout=8.0)
+        # Önce mevcut irtifadan dene (hızlı)
+        content = read_qr_from_camera(cameras, timeout=3.0)
         if content is not None:
-            log.info(f"  ✅ QR{qr_id} KAMERA ile okundu!")
+            log.info(f"  ✅ QR{qr_id} KAMERA ile okundu! (irtifa: {mission_alt:.0f}m)")
             return content
+
+        # Kademeli alçalma
+        for read_alt in [QR_READ_ALTITUDE, QR_READ_ALTITUDE_2]:
+            if ctrl.altitude <= read_alt + 0.5:
+                continue  # Zaten bu irtifadayız veya altındayız
+            log.info(f"  📷 QR okuma için alçalıyor: {ctrl.altitude:.0f}m → {read_alt}m")
+            await ctrl.change_altitude(read_alt)
+            await asyncio.sleep(1.0)
+
+            content = read_qr_from_camera(cameras, timeout=5.0)
+            if content is not None:
+                log.info(f"  ✅ QR{qr_id} KAMERA ile okundu! (irtifa: {read_alt}m)")
+                log.info(f"  📷 Görev irtifasına dönüş: {read_alt}m → {mission_alt:.0f}m")
+                await ctrl.change_altitude(mission_alt)
+                return content
+
+        # Hiçbirinde okunamadı, irtifaya dön
         log.warning(f"  ⚠ QR{qr_id} kameradan okunamadı, config fallback...")
+        await ctrl.change_altitude(mission_alt)
 
     # Config fallback
     content = QR_CONTENTS.get(qr_id)
@@ -89,7 +123,7 @@ def parse_next_qr(content: dict) -> int:
 
 async def execute_qr_mission(
     ctrl: SwarmController, content: dict,
-    cameras: SwarmCameras = None, detected_zones: dict = None
+    cameras=None, detected_zones: dict = None
 ):
     """
     QR içeriğindeki görevleri şartname sırasına göre icra et:
@@ -166,7 +200,43 @@ async def execute_qr_mission(
         await ctrl.hold(bekle_s)
 
 
-async def run_autonomous_mission(ctrl: SwarmController, cameras: SwarmCameras = None):
+async def move_to_with_color_scan(ctrl, target_ne, cameras, detected_zones):
+    """
+    Sürüyü hedefe taşırken kamera ile renkli alan taraması yap.
+    Hareket sırasında her 0.5 saniyede bir frame kontrol eder.
+    Renkli alan tespit ederse o anki NED koordinatını kaydeder.
+    """
+    import math
+
+    start = ctrl.swarm_center
+    dist = math.hypot(target_ne[0] - start[0], target_ne[1] - start[1])
+
+    if dist < 0.5:
+        return
+
+    # Hareket başlat (arka planda ctrl.move_to çalışırken tarama yapmak için)
+    move_task = asyncio.ensure_future(ctrl.move_to(target_ne, speed=CRUISE_SPEED))
+
+    # Hareket süresince renkli alan taraması
+    if cameras is not None:
+        scan_interval = 0.5  # saniye
+        while not move_task.done():
+            frame = cameras.get_frame(0)
+            if frame is not None:
+                color = detect_color_zone(frame)
+                if color and color not in detected_zones:
+                    # Tespit anındaki sürü merkezi = alanın NED koordinatı
+                    detected_zones[color] = tuple(ctrl.swarm_center)
+                    log.info(
+                        f"  🎨 KAMERA: {color} alan tespit edildi! "
+                        f"NED=({ctrl.swarm_center[0]:.1f}, {ctrl.swarm_center[1]:.1f})"
+                    )
+            await asyncio.sleep(scan_interval)
+
+    await move_task
+
+
+async def run_autonomous_mission(ctrl: SwarmController, cameras=None):
     """
     Görev 5.1 — Dinamik Sürü Kabiliyeti.
 
@@ -205,20 +275,11 @@ async def run_autonomous_mission(ctrl: SwarmController, cameras: SwarmCameras = 
         log.info(f"  Ziyaret edilen: {visited}")
         log.info(f"{'═' * 50}")
 
-        # QR noktasına git (formasyon rotasyonu ile)
-        # Hareket sırasında kamera ile renkli alan taraması yap
-        await ctrl.move_to(qr_pos, speed=CRUISE_SPEED)
+        # QR noktasına git — hareket sırasında kamera ile renk taraması
+        await move_to_with_color_scan(ctrl, qr_pos, cameras, detected_zones)
 
-        # Hareket sonrası renkli alan kontrolü
-        if cameras is not None:
-            frame = cameras.get_frame(0)
-            color = detect_color_zone(frame)
-            if color and color not in detected_zones:
-                detected_zones[color] = ctrl.swarm_center
-                log.info(f"  🎨 {color} alan tespit edildi: {ctrl.swarm_center}")
-
-        # QR'ı oku (kamera + fallback)
-        content = read_qr(current_qr, cameras)
+        # QR'ı oku (alçal → kamera → yüksel, fallback config)
+        content = await read_qr(current_qr, ctrl, cameras)
         if content is None:
             log.error(f"QR{current_qr} okunamadı, görev durduruluyor!")
             break
@@ -260,6 +321,14 @@ if __name__ == "__main__":
         datefmt="%H:%M:%S",
     )
 
+    async def _camera_viewer(cameras):
+        """Arka planda kamera görüntülerini göster (5 FPS)."""
+        import cv2
+        while True:
+            if cameras is not None:
+                cameras.show_frames()
+            await asyncio.sleep(0.2)
+
     async def _run():
         ctrl = SwarmController()
         await ctrl.connect(DRONE_PORTS, GRPC_BASE_PORT)
@@ -273,9 +342,16 @@ if __name__ == "__main__":
         except Exception as e:
             log.warning(f"Kamera başlatılamadı: {e} — config fallback aktif")
 
+        # Kamera görüntüleyici arka planda çalışsın
+        viewer_task = asyncio.ensure_future(_camera_viewer(cameras))
+
         try:
             await run_autonomous_mission(ctrl, cameras)
         except KeyboardInterrupt:
             await ctrl.land_all()
+        finally:
+            viewer_task.cancel()
+            import cv2
+            cv2.destroyAllWindows()
 
     asyncio.run(_run())

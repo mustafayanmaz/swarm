@@ -38,10 +38,7 @@ class GzCamera:
 
         # PX4 SITL multi-vehicle topic formatı:
         # /world/{world}/model/{model}_{i}/link/camera_link/sensor/camera/image
-        if drone_index == 0:
-            model_name = "x500_mono_cam_down"
-        else:
-            model_name = f"x500_mono_cam_down_{drone_index}"
+        model_name = f"x500_mono_cam_down_{drone_index}"
 
         self.topic = (
             f"/world/{world_name}/model/{model_name}"
@@ -62,23 +59,19 @@ class GzCamera:
         fmt = msg.pixel_format_type
 
         data = np.frombuffer(msg.data, dtype=np.uint8)
+        expected = h * w
 
-        if fmt in (1, 6):  # RGB_INT8
+        if data.size == expected * 3:
             data = data.reshape(h, w, 3)
             self._frame = cv2.cvtColor(data, cv2.COLOR_RGB2BGR)
-        elif fmt == 2:  # RGBA
+        elif data.size == expected * 4:
             data = data.reshape(h, w, 4)
             self._frame = cv2.cvtColor(data, cv2.COLOR_RGBA2BGR)
-        elif fmt == 3:  # L_INT8 (grayscale)
+        elif data.size == expected:
             self._frame = data.reshape(h, w)
         else:
-            # Bilinmeyen format — 3 kanal dene
-            try:
-                data = data.reshape(h, w, 3)
-                self._frame = cv2.cvtColor(data, cv2.COLOR_RGB2BGR)
-            except ValueError:
-                log.warning(f"Bilinmeyen pixel format: {fmt}, shape: {data.shape}")
-                return
+            log.warning(f"Beklenmeyen veri boyutu: {data.size}, fmt={fmt}, {w}x{h}")
+            return
 
         self._new_frame = True
 
@@ -97,6 +90,7 @@ class SwarmCameras:
     """Tüm droneların kameralarını yönetir."""
 
     def __init__(self, num_drones: int = 3, world_name: str = "default"):
+        self.num_drones = num_drones
         self.cameras = {}
         for i in range(num_drones):
             self.cameras[i] = GzCamera(i, world_name)
@@ -112,3 +106,13 @@ class SwarmCameras:
     def get_all_frames(self):
         """Tüm droneların frame'lerini döndür."""
         return {did: cam.get_frame() for did, cam in self.cameras.items()}
+
+    def show_frames(self):
+        """Tüm kamera görüntülerini OpenCV pencerelerinde göster. Non-blocking."""
+        for did, cam in self.cameras.items():
+            frame = cam.get_frame()
+            if frame is not None:
+                # Küçült (performans için)
+                small = cv2.resize(frame, (640, 480))
+                cv2.imshow(f"Drone {did} Kamera", small)
+        cv2.waitKey(1)  # Non-blocking

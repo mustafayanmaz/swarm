@@ -12,7 +12,6 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
 from mavsdk import System
 from mavsdk.offboard import OffboardError, PositionNedYaw
@@ -26,6 +25,11 @@ from src.formations import (
     rotate_offsets,
 )
 from src.config import HOME_POSITION
+
+try:
+    from src.config import DRONE_SPAWNS_NED
+except ImportError:
+    DRONE_SPAWNS_NED = None
 
 log = logging.getLogger("swarm")
 
@@ -79,7 +83,15 @@ class SwarmController:
         log.info(f"{len(self.drones)} drone bağlandı.")
 
     async def _read_home_positions(self):
-        """GPS home pozisyonlarını oku, NED offset'lerini hesapla."""
+        """Home offset'lerini hesapla. Önce config spawn, yoksa GPS."""
+        if DRONE_SPAWNS_NED:
+            for did in self.drones:
+                n, e = DRONE_SPAWNS_NED.get(did, (0.0, 0.0))
+                self.home_offsets[did] = (n, e)
+                log.info(f"[Drone {did}] Home NED offset (config): N={n:.2f}m E={e:.2f}m")
+            return
+
+        # GPS fallback
         homes = {}
         for did, drone in self.drones.items():
             async for home in drone.telemetry.home():
@@ -465,10 +477,15 @@ class SwarmController:
         landing_cmd = PositionNedYaw(
             landing_ne[0] - hn, landing_ne[1] - he, -self.altitude, 0.0
         )
+        log.info(
+            f"[Drone {agent_id}] Home offset: N={hn:.2f} E={he:.2f}, "
+            f"İniş NED: ({landing_ne[0]:.1f}, {landing_ne[1]:.1f}), "
+            f"Local cmd: N={landing_ne[0]-hn:.1f} E={landing_ne[1]-he:.1f} D={-self.altitude:.0f}"
+        )
 
-        # 1) İniş bölgesine git — SÜREKLİ setpoint gönder (10Hz, 10s)
+        # 1) İniş bölgesine git — SÜREKLİ setpoint gönder (10Hz, 15s)
         log.info(f"[Drone {agent_id}] İniş bölgesine gidiyor...")
-        for _ in range(100):
+        for _ in range(150):
             await drone.offboard.set_position_ned(landing_cmd)
             await asyncio.sleep(0.1)
 
