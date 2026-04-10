@@ -7,11 +7,13 @@ Otonom görev (5.1) ve yarı otonom kontrol (5.2) destekler.
 
 ```
 swarm/
-├── PX4-Autopilot/             # PX4 SITL (git submodule)
+├── PX4-Autopilot/             # PX4 SITL (manuel kurulum, .gitignore'da)
 ├── src/
 │   ├── config.py              # QR pozisyonları, görev tanımları, parametreler
-│   ├── formations.py          # Formasyon geometrisi (arrow, line, v, triangle)
+│   ├── formations.py          # Formasyon geometrisi (arrow, line, v)
 │   ├── swarm_controller.py    # Ana sürü kontrolcüsü (MAVSDK)
+│   ├── camera.py              # Gazebo kamera → OpenCV frame (gz-transport)
+│   ├── detection.py           # QR okuma (pyzbar+OpenCV) + renkli alan tespiti
 │   ├── missions/
 │   │   ├── autonomous.py      # Görev 5.1 — Otonom dinamik sürü
 │   │   └── semi_auto.py       # Görev 5.2 — Yarı otonom klavye kontrol
@@ -19,14 +21,9 @@ swarm/
 │       └── generate.py        # Gazebo world + QR PNG oluşturucu
 ├── scripts/
 │   └── launch_sim.sh          # 3 drone + Gazebo başlatıcı
-├── docs/
-│   ├── sartname.md            # Yarışma şartnamesi
-│   └── simulasyon.md          # Simülasyon sunum yönergesi
 ├── gazebo/                    # generate.py tarafından üretilir
 │   ├── textures/
-│   ├── models/
 │   └── worlds/
-├── main.py                    # Giriş noktası (CLI)
 ├── requirements.txt           # Python bağımlılıkları
 └── README.md
 ```
@@ -41,22 +38,40 @@ swarm/
 
 ## Kurulum (Sıfırdan)
 
-### 1. Repoyu klonla (PX4 submodule dahil)
+### 1. Repoyu klonla
 
 ```bash
 cd ~/Desktop
-git clone --recursive https://github.com/mustafayanmaz/swarm.git
+git clone https://github.com/mustafayanmaz/swarm.git
 cd swarm
 ```
 
-> Eğer `--recursive` unutulduysa:
-> ```bash
-> git submodule update --init --recursive
-> ```
-
-### 2. Python sanal ortam (venv)
+### 2. PX4-Autopilot kurulumu
 
 ```bash
+cd ~/Desktop/swarm
+git clone https://github.com/PX4/PX4-Autopilot.git --recursive
+cd PX4-Autopilot
+bash ./Tools/setup/ubuntu.sh
+```
+
+> `ubuntu.sh` tüm sistem bağımlılıklarını (Gazebo, cmake, protobuf vb.) kurar.
+> Kurulum sonrası **terminali kapatıp yeniden aç** (ortam değişkenleri yüklensin).
+
+### 3. PX4'ü derle (ilk build)
+
+```bash
+cd ~/Desktop/swarm/PX4-Autopilot
+make px4_sitl gz_x500
+```
+
+> İlk build uzun sürer (~5-10 dk). Tamamlandığında Gazebo açılır, drone görünür.
+> **Ctrl+C** ile kapat. Build artık hazır.
+
+### 4. Python sanal ortam (venv)
+
+```bash
+cd ~/Desktop/swarm
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
@@ -65,19 +80,14 @@ pip install -r requirements.txt
 
 > Her yeni terminal açtığında `source venv/bin/activate` çalıştır.
 
-### 3. PX4 sistem bağımlılıkları
+### 5. gz-transport Python bağlantısı (kamera için)
 
 ```bash
-cd PX4-Autopilot
-bash ./Tools/setup/ubuntu.sh
+# Sistem paketlerini venv'e linkle
+ln -sf /usr/lib/python3/dist-packages/gz ~/Desktop/swarm/venv/lib/python3.10/site-packages/gz
 ```
 
-> `ubuntu.sh` tüm sistem bağımlılıklarını (Gazebo, cmake, protobuf vb.) kurar.  
-> Kurulum sonrası **terminali kapatıp yeniden aç** (ortam değişkenleri yüklensin).
-
-### 4. PX4'ü derle (ilk build)
-
-```bash
+### 6. Gazebo arena oluştur
 cd ~/Desktop/swarm/PX4-Autopilot
 make px4_sitl gz_x500
 ```
@@ -90,7 +100,7 @@ make px4_sitl gz_x500
 ```bash
 cd ~/Desktop/swarm
 source venv/bin/activate
-python -m src.arena.generate
+python src/arena/generate.py
 ```
 
 Bu komut:
@@ -209,9 +219,9 @@ Her QR kodunda JSON formatında:
 {
   "qr_id": 1,
   "gorev": {
-    "formasyon": {"aktif": true, "tip": "OKBASI", "mesafe": 6.0},
-    "manevra_pitch_roll": {"aktif": false, "pitch_deg": 0, "roll_deg": 0},
-    "irtifa_degisim": {"aktif": true, "deger": 20},
+    "formasyon": {"aktif": true, "tip": "OKBASI"},
+    "manevra_pitch_roll": {"aktif": false, "pitch_deg": "0", "roll_deg": "0"},
+    "irtifa_degisim": {"aktif": true, "deger": 8},
     "bekleme_suresi_s": 3
   },
   "suruden_ayrilma": {
@@ -224,7 +234,7 @@ Her QR kodunda JSON formatında:
 }
 ```
 
-Formasyon tipleri: `OKBASI`, `CIZGI`, `V`, `UCGEN`
+Formasyon tipleri: `OKBASI`, `CIZGI`, `V`
 
 ---
 
@@ -237,7 +247,7 @@ Tüm parametreler `src/config.py` dosyasında:
 | `TEAM_ID` | Takım numarası (QR rotasını belirler) | `1` |
 | `NUM_DRONES` | Drone sayısı | `3` |
 | `FIRST_QR` | İlk gidilecek QR noktası | `1` |
-| `DEFAULT_ALTITUDE` | Kalkış irtifası (m) | `15.0` |
+| `DEFAULT_ALTITUDE` | Kalkış irtifası (m) | `8.0` |
 | `DEFAULT_AGENT_DISTANCE` | Ajanlar arası mesafe (m) | `5.0` |
 | `CRUISE_SPEED` | Seyir hızı (m/s) | `3.0` |
 
@@ -250,7 +260,7 @@ QR pozisyonları ve görev içerikleri de `src/config.py`'de tanımlıdır.
 QR pozisyonları veya görev içeriklerini değiştirdikten sonra:
 
 ```bash
-python -m src.arena.generate
+python src/arena/generate.py
 ```
 
 Bu, Gazebo world dosyasını ve QR PNG'lerini yeniden üretir.
@@ -264,7 +274,7 @@ Bu, Gazebo world dosyasını ve QR PNG'lerini yeniden üretir.
 | `ModuleNotFoundError: mavsdk` | `source venv/bin/activate && pip install mavsdk` |
 | Drone bağlanmıyor | Simülasyon çalışıyor mu kontrol et (`scripts/launch_sim.sh`) |
 | `lockstep_scheduler` hatası | `source Tools/simulation/gz/setup_gz.bash` komutu çalıştır |
-| Gazebo'da QR görünmüyor | `python -m src.arena.generate` ile world'ü yeniden üret |
+| Gazebo'da QR görünmüyor | `python src/arena/generate.py` ile world'ü yeniden üret |
 | QGroundControl bağlanmıyor | Aynı portları kullanma, QGC otomatik bağlanır |
 | Arena yüklenmiyor | `make px4_sitl gz_x500` ile PX4'ü yeniden başlat |
 

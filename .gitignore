@@ -29,8 +29,8 @@ logs/
 gazebo/textures/
 gazebo/worlds/
 
-# PX4 build artifacts (inside submodule, but just in case)
-PX4-Autopilot/build/
+# PX4 (manuel kurulum, submodule değil)
+PX4-Autopilot/
 
 # QGroundControl
 *.AppImage
