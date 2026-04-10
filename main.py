@@ -12,8 +12,8 @@ import asyncio
 import logging
 import sys
 
-from config import DRONE_PORTS, GRPC_BASE_PORT
-from swarm_controller import SwarmController
+from src.config import DRONE_PORTS, GRPC_BASE_PORT
+from src.swarm_controller import SwarmController
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,11 +75,11 @@ async def main():
 
     try:
         if mode == "mission":
-            from mission_auto import run_autonomous_mission
+            from src.missions.autonomous import run_autonomous_mission
             await run_autonomous_mission(ctrl)
 
         elif mode == "semi":
-            from mission_semi import run_semi_auto
+            from src.missions.semi_auto import run_semi_auto
             await run_semi_auto(ctrl)
 
         elif mode == "formation":

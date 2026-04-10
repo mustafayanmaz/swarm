@@ -7,22 +7,28 @@ Otonom görev (5.1) ve yarı otonom kontrol (5.2) destekler.
 
 ```
 swarm/
-├── PX4-Autopilot/         # PX4 SITL (git submodule)
-├── config.py              # QR pozisyonları, görev tanımları, parametreler
-├── formations.py          # Formasyon geometrisi (arrow, line, v, triangle)
-├── swarm_controller.py    # Ana sürü kontrolcüsü (MAVSDK)
-├── mission_auto.py        # Görev 5.1 — Otonom dinamik sürü
-├── mission_semi.py        # Görev 5.2 — Yarı otonom klavye kontrol
-├── main.py                # Giriş noktası (CLI)
-├── generate_arena.py      # Gazebo world + QR PNG oluşturucu
-├── launch_sim.sh          # 3 drone + Gazebo başlatıcı
-├── requirements.txt       # Python bağımlılıkları
-├── gazebo/
-│   ├── textures/          # QR kod ve iniş bölgesi PNG'leri (generate_arena.py üretir)
-│   └── worlds/            # Gazebo SDF world dosyası (generate_arena.py üretir)
-└── docs/
-    ├── sartname.md        # Yarışma şartnamesi
-    └── simulasyon.md      # Simülasyon sunum yönergesi
+├── PX4-Autopilot/             # PX4 SITL (git submodule)
+├── src/
+│   ├── config.py              # QR pozisyonları, görev tanımları, parametreler
+│   ├── formations.py          # Formasyon geometrisi (arrow, line, v, triangle)
+│   ├── swarm_controller.py    # Ana sürü kontrolcüsü (MAVSDK)
+│   ├── missions/
+│   │   ├── autonomous.py      # Görev 5.1 — Otonom dinamik sürü
+│   │   └── semi_auto.py       # Görev 5.2 — Yarı otonom klavye kontrol
+│   └── arena/
+│       └── generate.py        # Gazebo world + QR PNG oluşturucu
+├── scripts/
+│   └── launch_sim.sh          # 3 drone + Gazebo başlatıcı
+├── docs/
+│   ├── sartname.md            # Yarışma şartnamesi
+│   └── simulasyon.md          # Simülasyon sunum yönergesi
+├── gazebo/                    # generate.py tarafından üretilir
+│   ├── textures/
+│   ├── models/
+│   └── worlds/
+├── main.py                    # Giriş noktası (CLI)
+├── requirements.txt           # Python bağımlılıkları
+└── README.md
 ```
 
 ## Gereksinimler
@@ -84,7 +90,7 @@ make px4_sitl gz_x500
 ```bash
 cd ~/Desktop/swarm
 source venv/bin/activate
-python generate_arena.py
+python -m src.arena.generate
 ```
 
 Bu komut:
@@ -101,8 +107,8 @@ Bu komut:
 
 ```bash
 cd ~/Desktop/swarm
-chmod +x launch_sim.sh
-./launch_sim.sh
+chmod +x scripts/launch_sim.sh
+./scripts/launch_sim.sh
 ```
 
 Bu script:
@@ -154,9 +160,9 @@ source venv/bin/activate
 ### Görev 5.1 — Otonom Dinamik Sürü
 
 ```bash
-python mission_auto.py
-# veya
 python main.py mission
+# veya
+python -m src.missions.autonomous
 ```
 
 Drone'lar:
@@ -168,9 +174,9 @@ Drone'lar:
 ### Görev 5.2 — Yarı Otonom Kontrol
 
 ```bash
-python mission_semi.py
-# veya
 python main.py semi
+# veya
+python -m src.missions.semi_auto
 ```
 
 Klavye kontrolleri:
@@ -224,7 +230,7 @@ Formasyon tipleri: `OKBASI`, `CIZGI`, `V`, `UCGEN`
 
 ## Yapılandırma
 
-Tüm parametreler `config.py` dosyasında:
+Tüm parametreler `src/config.py` dosyasında:
 
 | Parametre | Açıklama | Varsayılan |
 |-----------|----------|------------|
@@ -235,7 +241,7 @@ Tüm parametreler `config.py` dosyasında:
 | `DEFAULT_AGENT_DISTANCE` | Ajanlar arası mesafe (m) | `5.0` |
 | `CRUISE_SPEED` | Seyir hızı (m/s) | `3.0` |
 
-QR pozisyonları ve görev içerikleri de `config.py`'de tanımlıdır.
+QR pozisyonları ve görev içerikleri de `src/config.py`'de tanımlıdır.
 
 ---
 
@@ -244,7 +250,7 @@ QR pozisyonları ve görev içerikleri de `config.py`'de tanımlıdır.
 QR pozisyonları veya görev içeriklerini değiştirdikten sonra:
 
 ```bash
-python generate_arena.py
+python -m src.arena.generate
 ```
 
 Bu, Gazebo world dosyasını ve QR PNG'lerini yeniden üretir.
@@ -256,9 +262,9 @@ Bu, Gazebo world dosyasını ve QR PNG'lerini yeniden üretir.
 | Sorun | Çözüm |
 |-------|-------|
 | `ModuleNotFoundError: mavsdk` | `source venv/bin/activate && pip install mavsdk` |
-| Drone bağlanmıyor | Simülasyon çalışıyor mu kontrol et (`launch_sim.sh`) |
+| Drone bağlanmıyor | Simülasyon çalışıyor mu kontrol et (`scripts/launch_sim.sh`) |
 | `lockstep_scheduler` hatası | `source Tools/simulation/gz/setup_gz.bash` komutu çalıştır |
-| Gazebo'da QR görünmüyor | `python generate_arena.py` ile world'ü yeniden üret |
+| Gazebo'da QR görünmüyor | `python -m src.arena.generate` ile world'ü yeniden üret |
 | QGroundControl bağlanmıyor | Aynı portları kullanma, QGC otomatik bağlanır |
 | Arena yüklenmiyor | `make px4_sitl gz_x500` ile PX4'ü yeniden başlat |
 

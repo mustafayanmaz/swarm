@@ -12,14 +12,14 @@ from typing import Dict, List, Optional, Tuple
 from mavsdk import System
 from mavsdk.offboard import OffboardError, PositionNedYaw
 
-from formations import (
+from src.formations import (
     apply_pitch_offsets,
     apply_roll_offsets,
     compute_heading,
     get_formation_offsets,
     rotate_offsets,
 )
-from config import HOME_POSITION
+from src.config import HOME_POSITION
 
 log = logging.getLogger("swarm")
 

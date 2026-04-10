@@ -5,7 +5,8 @@
 #           ./launch_sim.sh headless (GUI olmadan)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PX4_DIR="$SCRIPT_DIR/PX4-Autopilot"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PX4_DIR="$REPO_DIR/PX4-Autopilot"
 ROOTFS="$PX4_DIR/build/px4_sitl_default/rootfs"
 PX4_BIN="$PX4_DIR/build/px4_sitl_default/bin/px4"
 NUM_DRONES=3
@@ -66,12 +67,12 @@ else
 fi
 
 # Sürü İHA arena modellerini Gazebo path'e ekle
-SWARM_MODELS="$SCRIPT_DIR/gazebo/models"
+SWARM_MODELS="$REPO_DIR/gazebo/models"
 export GZ_SIM_RESOURCE_PATH="${SWARM_MODELS}:${GZ_SIM_RESOURCE_PATH}"
 echo -e "${GREEN}Arena model yolu eklendi: $SWARM_MODELS${NC}"
 
 # Arena world dosyası
-SWARM_WORLD="$SCRIPT_DIR/gazebo/worlds/swarm_arena.sdf"
+SWARM_WORLD="$REPO_DIR/gazebo/worlds/swarm_arena.sdf"
 
 # Önceki PX4/Gazebo süreçlerini temizle
 echo -e "${YELLOW}Önceki süreçler temizleniyor...${NC}"
@@ -80,7 +81,7 @@ pkill -9 -f "gz sim" 2>/dev/null || true
 sleep 2
 
 # Log dizini
-LOG_DIR="$SCRIPT_DIR/logs"
+LOG_DIR="$REPO_DIR/logs"
 rm -rf "$LOG_DIR"
 mkdir -p "$LOG_DIR"
 
@@ -156,7 +157,7 @@ done
 echo ""
 echo -e "${YELLOW}  QGroundControl otomatik bağlanacaktır.${NC}"
 echo -e "${YELLOW}  swarm.py çalıştırmak için başka terminalde:${NC}"
-echo -e "${CYAN}    cd $SCRIPT_DIR && python3 mission_auto.py${NC}"
+echo -e "${CYAN}    cd $REPO_DIR && python3 main.py${NC}"
 echo ""
 echo -e "${RED}  Durdurmak için: Ctrl+C${NC}"
 echo -e "${CYAN}========================================${NC}"

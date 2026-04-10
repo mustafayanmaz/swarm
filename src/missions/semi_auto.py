@@ -10,8 +10,8 @@ import sys
 import termios
 import tty
 
-from config import DEFAULT_ALTITUDE, DEFAULT_AGENT_DISTANCE
-from swarm_controller import SwarmController
+from src.config import DEFAULT_ALTITUDE, DEFAULT_AGENT_DISTANCE
+from src.swarm_controller import SwarmController
 
 log = logging.getLogger("swarm")
 
@@ -190,7 +190,7 @@ async def run_semi_auto(ctrl: SwarmController):
 
 if __name__ == "__main__":
     import logging
-    from config import DRONE_PORTS, GRPC_BASE_PORT
+    from src.config import DRONE_PORTS, GRPC_BASE_PORT
 
     logging.basicConfig(
         level=logging.INFO,

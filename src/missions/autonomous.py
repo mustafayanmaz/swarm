@@ -13,7 +13,7 @@ Akış:
 import asyncio
 import logging
 
-from config import (
+from src.config import (
     DEFAULT_ALTITUDE,
     DEFAULT_FORMATION,
     DEFAULT_AGENT_DISTANCE,
@@ -25,7 +25,7 @@ from config import (
     TEAM_ID,
     CRUISE_SPEED,
 )
-from swarm_controller import SwarmController
+from src.swarm_controller import SwarmController
 
 log = logging.getLogger("swarm")
 
@@ -195,7 +195,7 @@ async def run_autonomous_mission(ctrl: SwarmController):
 
 if __name__ == "__main__":
     import logging
-    from config import DRONE_PORTS, GRPC_BASE_PORT
+    from src.config import DRONE_PORTS, GRPC_BASE_PORT
 
     logging.basicConfig(
         level=logging.INFO,

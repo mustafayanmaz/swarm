@@ -11,14 +11,14 @@ import shutil
 import qrcode
 from PIL import Image
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TEXTURE_DIR = os.path.join(BASE_DIR, "gazebo", "textures")
 WORLD_DIR = os.path.join(BASE_DIR, "gazebo", "worlds")
 os.makedirs(TEXTURE_DIR, exist_ok=True)
 os.makedirs(WORLD_DIR, exist_ok=True)
 
 # config.py'den QR içeriklerini al
-from config import QR_CONTENTS
+from src.config import QR_CONTENTS
 
 # ─── Altıgen QR Pozisyonları ────────────────────────────────
 HEXAGON_RADIUS = 25.0
