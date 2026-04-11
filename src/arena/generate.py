@@ -146,7 +146,7 @@ def make_lines():
       </visual></link>
     </model>
 """
-    # Rota (kırmızı)
+    # Rota (sarı — kırmızı/mavi iniş alanlarıyla karışmasın)
     route = [1, 4, 2, 3, 5, 6]
     for i in range(len(route) - 1):
         a, b = route[i], route[i + 1]
@@ -160,7 +160,7 @@ def make_lines():
       <pose>{mx} {my} 0.006 0 0 {ang}</pose>
       <link name="l"><visual name="v">
         <geometry><box><size>{l} 0.12 0.006</size></box></geometry>
-        <material><ambient>0.9 0.1 0.1 1</ambient><diffuse>0.9 0.1 0.1 1</diffuse></material>
+        <material><ambient>0.9 0.9 0.1 1</ambient><diffuse>0.9 0.9 0.1 1</diffuse></material>
       </visual></link>
     </model>
 """

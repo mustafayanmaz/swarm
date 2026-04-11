@@ -25,10 +25,6 @@ Thumbs.db
 logs/
 *.log
 
-# Gazebo generated (regenerate with: python generate_arena.py)
-gazebo/textures/
-gazebo/worlds/
-
 # PX4 (manuel kurulum, submodule değil)
 PX4-Autopilot/
 
@@ -38,6 +34,3 @@ PX4-Autopilot/
 # Misc
 *.bak
 *.backup
-
-# Gazebo models (generated)
-gazebo/models/

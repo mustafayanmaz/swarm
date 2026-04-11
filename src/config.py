@@ -44,7 +44,7 @@ HOME_POSITION = (0.0, 0.0)
 FIRST_QR = 1  # İlk gidilecek QR
 
 # --- Uçuş Parametreleri ---
-DEFAULT_ALTITUDE = 8.0        # metre (QR okunabilmesi için max 8m)
+DEFAULT_ALTITUDE = 6.0        # metre (QR okunabilmesi için max 6m)
 DEFAULT_AGENT_DISTANCE = 5.0  # metre (ajanlar arası, hakemler belirler)
 CRUISE_SPEED = 3.0            # m/s
 
@@ -75,7 +75,7 @@ QR_CONTENTS = {
             },
             "irtifa_degisim": {
                 "aktif": True,
-                "deger": 8,
+                "deger": 6,
             },
             "bekleme_suresi_s": 3,
         },
@@ -135,7 +135,7 @@ QR_CONTENTS = {
             },
             "irtifa_degisim": {
                 "aktif": True,
-                "deger": 8,
+                "deger": 6,
             },
             "bekleme_suresi_s": 5,
         },
@@ -195,7 +195,7 @@ QR_CONTENTS = {
             },
             "irtifa_degisim": {
                 "aktif": True,
-                "deger": 8,
+                "deger": 5,
             },
             "bekleme_suresi_s": 2,
         },

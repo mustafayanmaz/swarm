@@ -62,8 +62,8 @@ def read_qr_from_camera(cameras, timeout: float = 10.0) -> dict | None:
     return None
 
 
-QR_READ_ALTITUDE = 8.0   # İlk okuma denemesi irtifası
-QR_READ_ALTITUDE_2 = 5.0  # İlk başarısız olursa daha da alçal
+QR_READ_ALTITUDE = 6.0   # İlk okuma denemesi irtifası
+QR_READ_ALTITUDE_2 = 4.0  # İlk başarısız olursa daha da alçal
 
 
 async def read_qr(qr_id: int, ctrl: SwarmController, cameras=None) -> dict:
@@ -81,28 +81,36 @@ async def read_qr(qr_id: int, ctrl: SwarmController, cameras=None) -> dict:
 
     if cameras is not None:
         # Önce mevcut irtifadan dene (hızlı)
+        log.info(f"  📷 [1/3] Mevcut irtifadan deneniyor ({mission_alt:.0f}m, 3s)...")
         content = read_qr_from_camera(cameras, timeout=3.0)
         if content is not None:
             log.info(f"  ✅ QR{qr_id} KAMERA ile okundu! (irtifa: {mission_alt:.0f}m)")
             return content
+        log.info(f"  ❌ {mission_alt:.0f}m'den okunamadı")
 
         # Kademeli alçalma
+        step = 2
         for read_alt in [QR_READ_ALTITUDE, QR_READ_ALTITUDE_2]:
             if ctrl.altitude <= read_alt + 0.5:
-                continue  # Zaten bu irtifadayız veya altındayız
-            log.info(f"  📷 QR okuma için alçalıyor: {ctrl.altitude:.0f}m → {read_alt}m")
+                log.info(f"  📷 [{step}/3] Zaten {ctrl.altitude:.0f}m'de, {read_alt}m atlanıyor")
+                step += 1
+                continue
+            log.info(f"  📷 [{step}/3] Alçalıyor: {ctrl.altitude:.0f}m → {read_alt}m")
             await ctrl.change_altitude(read_alt)
             await asyncio.sleep(1.0)
 
+            log.info(f"  📷 [{step}/3] {read_alt}m'den deneniyor (5s)...")
             content = read_qr_from_camera(cameras, timeout=5.0)
             if content is not None:
                 log.info(f"  ✅ QR{qr_id} KAMERA ile okundu! (irtifa: {read_alt}m)")
                 log.info(f"  📷 Görev irtifasına dönüş: {read_alt}m → {mission_alt:.0f}m")
                 await ctrl.change_altitude(mission_alt)
                 return content
+            log.info(f"  ❌ {read_alt}m'den okunamadı")
+            step += 1
 
         # Hiçbirinde okunamadı, irtifaya dön
-        log.warning(f"  ⚠ QR{qr_id} kameradan okunamadı, config fallback...")
+        log.warning(f"  ⚠ QR{qr_id} kameradan okunamadı (3 irtifa denendi), config fallback...")
         await ctrl.change_altitude(mission_alt)
 
     # Config fallback
@@ -161,6 +169,10 @@ async def execute_qr_mission(
     irtifa = gorev["irtifa_degisim"]
     if irtifa["aktif"]:
         deger = float(irtifa["deger"])
+        MAX_ALT = 6.0
+        if deger > MAX_ALT:
+            log.warning(f"  ⚠ İrtifa {deger}m > {MAX_ALT}m üst sınır, {MAX_ALT}m'ye kısıtlandı")
+            deger = MAX_ALT
         log.info(f"  ▶ İrtifa değişimi: {deger}m")
         await ctrl.change_altitude(deger)
 
@@ -185,7 +197,7 @@ async def execute_qr_mission(
             log.error(f"  ❌ '{renk}' iniş bölgesi bulunamadı!")
         else:
             log.info(f"  ▶ Drone {drone_id} sürüden ayrılıyor → {renk} bölge")
-            await ctrl.remove_agent(drone_id, landing_zone)
+            await ctrl.remove_agent(drone_id, landing_zone, cameras=cameras, target_color=renk)
 
             log.info(f"  ▶ Drone {drone_id} yerde bekliyor ({bekle}s)...")
             await asyncio.sleep(bekle)
@@ -217,20 +229,21 @@ async def move_to_with_color_scan(ctrl, target_ne, cameras, detected_zones):
     # Hareket başlat (arka planda ctrl.move_to çalışırken tarama yapmak için)
     move_task = asyncio.ensure_future(ctrl.move_to(target_ne, speed=CRUISE_SPEED))
 
-    # Hareket süresince renkli alan taraması
+    # Hareket süresince renkli alan taraması (tüm kameralar)
     if cameras is not None:
-        scan_interval = 0.5  # saniye
+        scan_interval = 0.1  # saniye (3m/s hızda 0.3m arayla tarama)
         while not move_task.done():
-            frame = cameras.get_frame(0)
-            if frame is not None:
-                color = detect_color_zone(frame)
-                if color and color not in detected_zones:
-                    # Tespit anındaki sürü merkezi = alanın NED koordinatı
-                    detected_zones[color] = tuple(ctrl.swarm_center)
-                    log.info(
-                        f"  🎨 KAMERA: {color} alan tespit edildi! "
-                        f"NED=({ctrl.swarm_center[0]:.1f}, {ctrl.swarm_center[1]:.1f})"
-                    )
+            for cam_id in range(cameras.num_drones):
+                frame = cameras.get_frame(cam_id)
+                if frame is not None:
+                    color = detect_color_zone(frame)
+                    if color and color not in detected_zones:
+                        # İlk tespit — koordinatı kaydet
+                        detected_zones[color] = tuple(ctrl.swarm_center)
+                        log.info(
+                            f"  🎨 KAMERA (Drone {cam_id}): {color} alan tespit edildi! "
+                            f"NED=({ctrl.swarm_center[0]:.1f}, {ctrl.swarm_center[1]:.1f})"
+                        )
             await asyncio.sleep(scan_interval)
 
     await move_task

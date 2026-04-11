@@ -450,10 +450,13 @@ class SwarmController:
     # ─── AJAN EKLEME / ÇIKARMA ────────────────────────────────
 
     async def remove_agent(
-        self, agent_id: int, landing_ne: Tuple[float, float]
+        self, agent_id: int, landing_ne: Tuple[float, float],
+        cameras=None, target_color: str = None
     ):
         """
         Ajanı sürüden çıkar ve belirtilen renkli bölgeye indir.
+        cameras + target_color verilirse iniş öncesi kamera ile
+        renkli alanın merkezine hizalanır.
         """
         if agent_id not in self.active_agents:
             log.warning(f"[Drone {agent_id}] Aktif değil, çıkarılamaz!")
@@ -474,13 +477,17 @@ class SwarmController:
         # Çıkan drone'u iniş bölgesinin üzerine yönlendir
         drone = self.drones[agent_id]
         hn, he = self.home_offsets[agent_id]
+
+        cur_n = landing_ne[0] - hn
+        cur_e = landing_ne[1] - he
+
         landing_cmd = PositionNedYaw(
-            landing_ne[0] - hn, landing_ne[1] - he, -self.altitude, 0.0
+            cur_n, cur_e, -self.altitude, 0.0
         )
         log.info(
             f"[Drone {agent_id}] Home offset: N={hn:.2f} E={he:.2f}, "
             f"İniş NED: ({landing_ne[0]:.1f}, {landing_ne[1]:.1f}), "
-            f"Local cmd: N={landing_ne[0]-hn:.1f} E={landing_ne[1]-he:.1f} D={-self.altitude:.0f}"
+            f"Local cmd: N={cur_n:.1f} E={cur_e:.1f} D={-self.altitude:.0f}"
         )
 
         # 1) İniş bölgesine git — SÜREKLİ setpoint gönder (10Hz, 15s)
@@ -489,7 +496,71 @@ class SwarmController:
             await drone.offboard.set_position_ned(landing_cmd)
             await asyncio.sleep(0.1)
 
-        # 2) Offboard durdur ve iniş komutu ver
+        # 2) Kamera ile renkli alana hizalan
+        if cameras is not None and target_color is not None:
+            from src.detection import detect_color_offset
+            import math
+
+            CAM_HFOV = 1.5708  # 90° rad
+            log.info(f"[Drone {agent_id}] 📷 Renkli alan hizalama: {target_color}")
+
+            for attempt in range(50):  # max 5s
+                frame = cameras.get_frame(agent_id)
+                if frame is None:
+                    await drone.offboard.set_position_ned(landing_cmd)
+                    await asyncio.sleep(0.1)
+                    continue
+
+                offset = detect_color_offset(frame, target_color)
+                if offset is None:
+                    # Renk görünmüyor, mevcut konumda kal
+                    await drone.offboard.set_position_ned(landing_cmd)
+                    await asyncio.sleep(0.1)
+                    continue
+
+                on, oe = offset  # offset_north, offset_east
+
+                if abs(on) < 0.08 and abs(oe) < 0.08:
+                    log.info(
+                        f"[Drone {agent_id}] ✅ Renkli alana hizalandı! "
+                        f"(offset: N={on:.2f}, E={oe:.2f})"
+                    )
+                    break
+
+                # İrtifaya göre yer coverage hesapla
+                ground_w = 2 * self.altitude * math.tan(CAM_HFOV / 2)
+                ground_h = ground_w * 960 / 1280
+
+                # Küçük adımlarla düzelt (gain=0.3 → aşırı tepki önle)
+                gain = 0.3
+                dn = on * (ground_h / 2) * gain
+                de = oe * (ground_w / 2) * gain
+
+                cur_n += dn
+                cur_e += de
+
+                landing_cmd = PositionNedYaw(
+                    cur_n, cur_e, -self.altitude, 0.0
+                )
+
+                if attempt % 10 == 0:
+                    log.info(
+                        f"[Drone {agent_id}] 📷 Hizalama #{attempt}: "
+                        f"offset=({on:.2f},{oe:.2f}) ΔN={dn:.2f}m ΔE={de:.2f}m"
+                    )
+
+                await drone.offboard.set_position_ned(landing_cmd)
+                await asyncio.sleep(0.1)
+
+            # Stabilizasyon: 2s pozisyon tut
+            log.info(f"[Drone {agent_id}] Stabilizasyon (2s)...")
+            for _ in range(20):
+                await drone.offboard.set_position_ned(landing_cmd)
+                await asyncio.sleep(0.1)
+
+            self._landing_positions[agent_id] = (cur_n + hn, cur_e + he)
+
+        # 3) Offboard durdur ve iniş komutu ver
         log.info(f"[Drone {agent_id}] İniş başlıyor...")
         try:
             await drone.offboard.stop()
@@ -499,19 +570,18 @@ class SwarmController:
         await drone.action.land()
         log.info(f"[Drone {agent_id}] İniş komutu gönderildi, yere inmesi bekleniyor...")
 
-        # 3) Telemetriden yere indiğini doğrula
+        # 4) Telemetriden yere indiğini doğrula
         async for state in drone.telemetry.landed_state():
             if state == LandedState.ON_GROUND:
                 break
         log.info(f"[Drone {agent_id}] Yere indi (telemetri onaylandı).")
 
-        # 4) Disarm
+        # 5) Disarm
         try:
             await drone.action.disarm()
         except Exception:
             pass
         log.info(f"[Drone {agent_id}] Disarm oldu.")
-
     async def add_agent(self, agent_id: int):
         """
         Yerdeki ajanı tekrar sürüye ekle.

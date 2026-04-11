@@ -114,14 +114,57 @@ def detect_color_zone(frame) -> str | None:
     blue_px = cv2.countNonZero(blue_mask)
     total_px = roi.shape[0] * roi.shape[1]
 
-    # En az %5 piksel renkli olmalı
-    threshold = total_px * 0.05
+    # En az %2 piksel renkli olmalı (8m irtifada 1.2m alan küçük görünür)
+    threshold = total_px * 0.02
 
     if red_px > threshold and red_px > blue_px:
-        log.info(f"Kırmızı alan tespit edildi ({red_px}/{total_px} px)")
+        pct = red_px / total_px * 100
+        log.info(f"🔴 KIRMIZI ALAN TESPİT EDİLDİ! ({pct:.1f}% piksel, {red_px}/{total_px})")
         return "kirmizi"
     elif blue_px > threshold and blue_px > red_px:
-        log.info(f"Mavi alan tespit edildi ({blue_px}/{total_px} px)")
+        pct = blue_px / total_px * 100
+        log.info(f"🔵 MAVİ ALAN TESPİT EDİLDİ! ({pct:.1f}% piksel, {blue_px}/{total_px})")
         return "mavi"
 
     return None
+
+
+def detect_color_offset(frame, target_color: str) -> tuple[float, float] | None:
+    """
+    Frame'de hedef renkli alanın piksel merkezini bul.
+    Returns: (offset_north, offset_east) normalize -1..+1, veya None
+             Aşağı bakan kamera: piksel y+ → North+, piksel x+ → East+
+    """
+    if frame is None:
+        return None
+
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    h, w = hsv.shape[:2]
+
+    if target_color == "kirmizi":
+        mask = (
+            cv2.inRange(hsv, np.array([0, 80, 80]), np.array([15, 255, 255]))
+            | cv2.inRange(hsv, np.array([160, 80, 80]), np.array([180, 255, 255]))
+        )
+    elif target_color == "mavi":
+        mask = cv2.inRange(hsv, np.array([100, 80, 80]), np.array([135, 255, 255]))
+    else:
+        return None
+
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+
+    if cv2.countNonZero(mask) < (h * w * 0.005):
+        return None
+
+    M = cv2.moments(mask)
+    if M["m00"] == 0:
+        return None
+
+    cx = M["m10"] / M["m00"]
+    cy = M["m01"] / M["m00"]
+
+    # Normalize: frame merkezi = (0,0)
+    offset_east = (cx - w / 2) / (w / 2)
+    offset_north = (cy - h / 2) / (h / 2)
+
+    return (offset_north, offset_east)
