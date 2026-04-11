@@ -11,7 +11,6 @@ from pyzbar.pyzbar import decode as pyzbar_decode
 
 log = logging.getLogger("swarm.detection")
 
-sdfsdfsdf
 _debug_counter = 0
 
 
