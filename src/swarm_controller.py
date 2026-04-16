@@ -30,6 +30,7 @@ from src.config import (
     COLLISION_CHECK_ENABLED,
     COLLISION_MIN_DISTANCE_M,
     COLLISION_VIOLATION_ACTION,
+    COLLISION_OBSTACLE_PROXY_ENABLED,
     FORMATION_ENVELOPE_ENABLED,
     ARENA_NORTH_MIN_M,
     ARENA_NORTH_MAX_M,
@@ -318,27 +319,28 @@ class SwarmController:
             self._collision_violation_active = True
             return False
 
-        obstacle_ok, min_clearance, min_drone, boundary = self._check_obstacle_clearance_for_targets(local_targets)
-        if not obstacle_ok:
-            if not self._collision_violation_active:
-                if COLLISION_VIOLATION_ACTION == "abort":
-                    action = "abort"
-                    self._activate_abort("obstacle_clearance")
-                else:
-                    action = "hold"
-                    self._activate_hold("obstacle_clearance")
+        if COLLISION_OBSTACLE_PROXY_ENABLED:
+            obstacle_ok, min_clearance, min_drone, boundary = self._check_obstacle_clearance_for_targets(local_targets)
+            if not obstacle_ok:
+                if not self._collision_violation_active:
+                    if COLLISION_VIOLATION_ACTION == "abort":
+                        action = "abort"
+                        self._activate_abort("obstacle_clearance")
+                    else:
+                        action = "hold"
+                        self._activate_hold("obstacle_clearance")
 
-                self.record_incident(
-                    code=IncidentCode.COLLISION_OBSTACLE_DISTANCE,
-                    action_taken=action,
-                    drone_id=min_drone,
-                    details=(
-                        f"clearance={min_clearance:.2f}m threshold={COLLISION_MIN_DISTANCE_M:.2f}m "
-                        f"boundary={boundary}"
-                    ),
-                )
-            self._collision_violation_active = True
-            return False
+                    self.record_incident(
+                        code=IncidentCode.COLLISION_OBSTACLE_DISTANCE,
+                        action_taken=action,
+                        drone_id=min_drone,
+                        details=(
+                            f"clearance={min_clearance:.2f}m threshold={COLLISION_MIN_DISTANCE_M:.2f}m "
+                            f"boundary={boundary}"
+                        ),
+                    )
+                self._collision_violation_active = True
+                return False
 
         self._collision_violation_active = False
         return True
