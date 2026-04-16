@@ -265,6 +265,7 @@ async def run_semi_auto(ctrl: SwarmController):
     Görev 5.2 — Yarı Otonom Sürü Kontrolü.
     main.py'den çağrılır.
     """
+    ctrl.set_failsafe_mode(False)
     semi = SemiAutoController(ctrl)
     await semi.run()
 

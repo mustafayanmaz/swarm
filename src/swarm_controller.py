@@ -93,6 +93,7 @@ class SwarmController:
         self._envelope_violation_active: bool = False
         self._drift_violation_active: bool = False
         self._last_drift_check_s: float = 0.0
+        self._failsafe_enabled: bool = False
 
     def _snapshot_state(self) -> Dict[str, object]:
         """Current swarm state snapshot for incident records."""
@@ -136,6 +137,20 @@ class SwarmController:
     @property
     def hold_active(self) -> bool:
         return self._hold_active
+
+    @property
+    def failsafe_enabled(self) -> bool:
+        return self._failsafe_enabled
+
+    def set_failsafe_mode(self, enabled: bool) -> None:
+        """Enable/disable runtime failsafe enforcement without removing logging stack."""
+        self._failsafe_enabled = enabled
+        if not enabled:
+            self._hold_active = False
+            self._abort_active = False
+            self._collision_violation_active = False
+            self._envelope_violation_active = False
+            self._drift_violation_active = False
 
     def _activate_hold(self, reason: str) -> None:
         self._hold_active = True
@@ -351,7 +366,7 @@ class SwarmController:
 
     async def _run_drift_check(self) -> bool:
         """Telemetry-based drift check against commanded swarm targets."""
-        if not DRIFT_FAILSAFE_ENABLED or self._abort_active:
+        if not self._failsafe_enabled or not DRIFT_FAILSAFE_ENABLED or self._abort_active:
             return True
 
         now_s = time.monotonic()
@@ -532,7 +547,7 @@ class SwarmController:
         """Arka planda 10Hz setpoint gönder (PX4 offboard timeout'u önler)."""
         while self._streaming:
             try:
-                if not self._abort_active:
+                if self._failsafe_enabled and not self._abort_active:
                     targets = self._get_global_targets()
                     self._run_collision_check(targets)
                     self._run_envelope_check()
@@ -651,15 +666,15 @@ class SwarmController:
         if dist < 0.5:
             return
 
-        if self._abort_active:
+        if self._failsafe_enabled and self._abort_active:
             log.error("ABORT aktif, move_to atlandı.")
             return
 
-        if self._hold_active:
+        if self._failsafe_enabled and self._hold_active:
             log.warning("HOLD aktif, move_to atlandı.")
             return
 
-        if not self._run_envelope_check(center=target_ne):
+        if self._failsafe_enabled and not self._run_envelope_check(center=target_ne):
             log.error("Hedef envelope dışında, move_to iptal edildi: %s", target_ne)
             return
 
@@ -731,11 +746,11 @@ class SwarmController:
         self, formation_type: str, distance: float = None
     ):
         """Formasyon tipini değiştir."""
-        if self._abort_active:
+        if self._failsafe_enabled and self._abort_active:
             log.error("ABORT aktif, formasyon değişikliği atlandı.")
             return
 
-        if self._hold_active:
+        if self._failsafe_enabled and self._hold_active:
             log.warning("HOLD aktif, formasyon değişikliği atlandı.")
             return
 
@@ -747,11 +762,11 @@ class SwarmController:
             heading=self.formation_heading,
         )
 
-        if COLLISION_CHECK_ENABLED and not self._run_collision_check(candidate_targets):
+        if self._failsafe_enabled and COLLISION_CHECK_ENABLED and not self._run_collision_check(candidate_targets):
             log.error("Formasyon değişikliği çarpışma riskinden dolayı iptal edildi.")
             return
 
-        if FORMATION_ENVELOPE_ENABLED and not self._run_envelope_check(
+        if self._failsafe_enabled and FORMATION_ENVELOPE_ENABLED and not self._run_envelope_check(
             center=self.swarm_center,
             formation_distance=next_distance,
         ):
@@ -854,7 +869,7 @@ class SwarmController:
             log.warning(f"[Drone {agent_id}] Aktif değil, çıkarılamaz!")
             return
 
-        if self._abort_active:
+        if self._failsafe_enabled and self._abort_active:
             log.error(f"[Drone {agent_id}] ABORT aktif, remove_agent atlandı.")
             return
 

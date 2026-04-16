@@ -370,6 +370,8 @@ async def run_autonomous_mission(ctrl: SwarmController, cameras=None):
     log.info(f"  İlk QR: QR{FIRST_QR}")
     log.info("═" * 55)
 
+    ctrl.set_failsafe_mode(True)
+
     # 1) Kalkış
     ctrl.formation_type = DEFAULT_FORMATION
     ctrl.formation_distance = DEFAULT_AGENT_DISTANCE
