@@ -496,65 +496,148 @@ class SwarmController:
             await drone.offboard.set_position_ned(landing_cmd)
             await asyncio.sleep(0.1)
 
-        # 2) Kamera ile renkli alana hizalan
+        # 2) Kamera ile renkli alana hizalan (ampirik kalibrasyon)
         if cameras is not None and target_color is not None:
             from src.detection import detect_color_offset
             import math
 
-            CAM_HFOV = 1.5708  # 90° rad
             log.info(f"[Drone {agent_id}] 📷 Renkli alan hizalama: {target_color}")
 
-            for attempt in range(50):  # max 5s
-                frame = cameras.get_frame(agent_id)
-                if frame is None:
-                    await drone.offboard.set_position_ned(landing_cmd)
+            # ── Kalibrasyon: drone'u küçük adımlarla hareket ettirip ──
+            # ── piksel değişimini ölçerek eksen eşlemesini belirle   ──
+            PROBE = 0.5  # metre (daha büyük adım = daha güvenilir Jacobian)
+            SETTLE = 25  # 2.5 saniye (drone'un pozisyona oturması için)
+
+            async def _get_fresh_offset():
+                """Taze frame al ve offset ölç."""
+                # Eski buffer'ı temizle
+                for _ in range(5):
+                    cameras.get_frame(agent_id)
+                    await asyncio.sleep(0.05)
+                f = cameras.get_frame(agent_id)
+                if f is None:
+                    return None
+                return detect_color_offset(f, target_color)
+
+            async def _go_and_measure(n, e):
+                """Pozisyona git, bekle, ölç."""
+                cmd = PositionNedYaw(n, e, -self.altitude, 0.0)
+                for _ in range(SETTLE):
+                    await drone.offboard.set_position_ned(cmd)
                     await asyncio.sleep(0.1)
-                    continue
+                return await _get_fresh_offset()
 
-                offset = detect_color_offset(frame, target_color)
-                if offset is None:
-                    # Renk görünmüyor, mevcut konumda kal
-                    await drone.offboard.set_position_ned(landing_cmd)
-                    await asyncio.sleep(0.1)
-                    continue
+            log.info(f"[Drone {agent_id}] 📐 Kalibrasyon başlıyor...")
 
-                on, oe = offset  # offset_north, offset_east
+            off0 = await _go_and_measure(cur_n, cur_e)
+            off_n = await _go_and_measure(cur_n + PROBE, cur_e) if off0 else None
+            off_e = await _go_and_measure(cur_n, cur_e + PROBE) if off0 else None
 
-                if abs(on) < 0.08 and abs(oe) < 0.08:
-                    log.info(
-                        f"[Drone {agent_id}] ✅ Renkli alana hizalandı! "
-                        f"(offset: N={on:.2f}, E={oe:.2f})"
-                    )
-                    break
-
-                # İrtifaya göre yer coverage hesapla
-                ground_w = 2 * self.altitude * math.tan(CAM_HFOV / 2)
-                ground_h = ground_w * 960 / 1280
-
-                # Küçük adımlarla düzelt (gain=0.3 → aşırı tepki önle)
-                gain = 0.3
-                dn = on * (ground_h / 2) * gain
-                de = oe * (ground_w / 2) * gain
-
-                cur_n += dn
-                cur_e += de
-
-                landing_cmd = PositionNedYaw(
-                    cur_n, cur_e, -self.altitude, 0.0
-                )
-
-                if attempt % 10 == 0:
-                    log.info(
-                        f"[Drone {agent_id}] 📷 Hizalama #{attempt}: "
-                        f"offset=({on:.2f},{oe:.2f}) ΔN={dn:.2f}m ΔE={de:.2f}m"
-                    )
-
-                await drone.offboard.set_position_ned(landing_cmd)
+            # Başlangıca dön
+            back_cmd = PositionNedYaw(cur_n, cur_e, -self.altitude, 0.0)
+            for _ in range(SETTLE):
+                await drone.offboard.set_position_ned(back_cmd)
                 await asyncio.sleep(0.1)
 
-            # Stabilizasyon: 2s pozisyon tut
-            log.info(f"[Drone {agent_id}] Stabilizasyon (2s)...")
-            for _ in range(20):
+            calib_ok = False
+            inv00 = inv01 = inv10 = inv11 = 0.0
+
+            if off0 and off_n and off_e:
+                # Jacobian: J * [dn, de] = [d_raw0, d_raw1]
+                j00 = (off_n[0] - off0[0]) / PROBE
+                j10 = (off_n[1] - off0[1]) / PROBE
+                j01 = (off_e[0] - off0[0]) / PROBE
+                j11 = (off_e[1] - off0[1]) / PROBE
+
+                det = j00 * j11 - j01 * j10
+                log.info(
+                    f"[Drone {agent_id}] 📐 J=[{j00:.3f} {j01:.3f}; "
+                    f"{j10:.3f} {j11:.3f}], det={det:.4f}"
+                )
+
+                if abs(det) > 0.005:
+                    inv00 = j11 / det
+                    inv01 = -j01 / det
+                    inv10 = -j10 / det
+                    inv11 = j00 / det
+                    calib_ok = True
+                    log.info(
+                        f"[Drone {agent_id}] 📐 J_inv=[{inv00:.2f} {inv01:.2f}; "
+                        f"{inv10:.2f} {inv11:.2f}] — Kalibrasyon OK"
+                    )
+                else:
+                    log.warning(f"[Drone {agent_id}] ⚠ Jacobian dejenere (det={det:.4f})")
+            else:
+                log.warning(f"[Drone {agent_id}] ⚠ Kalibrasyon başarısız (renk algılanamadı)")
+
+            # ── Hizalama döngüsü ──
+            if calib_ok:
+                MAX_ITERS = 30
+                MAX_DRIFT = 3.0
+                gain = 0.5
+                initial_n, initial_e = cur_n, cur_e
+
+                for attempt in range(MAX_ITERS):
+                    # Pozisyon komutu gönder ve drone'un ulaşmasını bekle (1.5s)
+                    for _ in range(15):
+                        await drone.offboard.set_position_ned(landing_cmd)
+                        await asyncio.sleep(0.1)
+
+                    # Taze frame al (birkaç frame atla — eski buffer'ı temizle)
+                    for _ in range(5):
+                        cameras.get_frame(agent_id)
+                        await asyncio.sleep(0.05)
+                    frame = cameras.get_frame(agent_id)
+
+                    if frame is None:
+                        continue
+
+                    offset = detect_color_offset(
+                        frame, target_color,
+                        save_debug=True,
+                        debug_tag=f"d{agent_id}_i{attempt}"
+                    )
+                    if offset is None:
+                        log.info(f"[Drone {agent_id}] 📷 #{attempt}: Renk görünmüyor")
+                        continue
+
+                    r0, r1 = offset
+
+                    err = math.hypot(r0, r1)
+                    if err < 0.03:
+                        log.info(
+                            f"[Drone {agent_id}] ✅ Hizalandı! "
+                            f"raw=({r0:.3f},{r1:.3f}) err={err:.3f} — iter #{attempt}"
+                        )
+                        break
+
+                    # Jacobian ile düzeltme
+                    dn = -(inv00 * r0 + inv01 * r1) * gain
+                    de = -(inv10 * r0 + inv11 * r1) * gain
+
+                    new_n = cur_n + dn
+                    new_e = cur_e + de
+                    drift = math.hypot(new_n - initial_n, new_e - initial_e)
+
+                    if drift > MAX_DRIFT:
+                        log.warning(f"[Drone {agent_id}] ⚠ Drift sınırı ({drift:.1f}m)")
+                        break
+
+                    cur_n = new_n
+                    cur_e = new_e
+                    landing_cmd = PositionNedYaw(cur_n, cur_e, -self.altitude, 0.0)
+
+                    log.info(
+                        f"[Drone {agent_id}] 📷 #{attempt}: "
+                        f"raw=({r0:.3f},{r1:.3f}) err={err:.3f} Δ=({dn:.2f},{de:.2f}) "
+                        f"pos=({cur_n:.1f},{cur_e:.1f}) drift={drift:.2f}m"
+                    )
+            else:
+                log.info(f"[Drone {agent_id}] Config pozisyonunda iniş (kalibrasyon başarısız)")
+
+            # Stabilizasyon: 3s
+            log.info(f"[Drone {agent_id}] Stabilizasyon (3s)...")
+            for _ in range(30):
                 await drone.offboard.set_position_ned(landing_cmd)
                 await asyncio.sleep(0.1)
 

@@ -129,11 +129,15 @@ def detect_color_zone(frame) -> str | None:
     return None
 
 
-def detect_color_offset(frame, target_color: str) -> tuple[float, float] | None:
+def detect_color_offset(frame, target_color: str, save_debug: bool = False, debug_tag: str = "") -> tuple[float, float] | None:
     """
     Frame'de hedef renkli alanın piksel merkezini bul.
-    Returns: (offset_north, offset_east) normalize -1..+1, veya None
-             Aşağı bakan kamera: piksel y+ → North+, piksel x+ → East+
+    Returns: (raw_x, raw_y) normalize -1..+1, veya None
+             raw_x: (cx - center) / half_width  — pozitif = sağ
+             raw_y: (cy - center) / half_height — pozitif = aşağı
+
+    NOT: Bu ham piksel offsetleridir. NED eksenlerine dönüşüm
+    swarm_controller'daki Jacobian kalibrasyonu ile yapılır.
     """
     if frame is None:
         return None
@@ -153,7 +157,8 @@ def detect_color_offset(frame, target_color: str) -> tuple[float, float] | None:
 
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
 
-    if cv2.countNonZero(mask) < (h * w * 0.005):
+    colored_px = cv2.countNonZero(mask)
+    if colored_px < (h * w * 0.002):
         return None
 
     M = cv2.moments(mask)
@@ -163,8 +168,24 @@ def detect_color_offset(frame, target_color: str) -> tuple[float, float] | None:
     cx = M["m10"] / M["m00"]
     cy = M["m01"] / M["m00"]
 
-    # Normalize: frame merkezi = (0,0)
-    offset_east = (cx - w / 2) / (w / 2)
-    offset_north = (cy - h / 2) / (h / 2)
+    # Ham piksel offsetleri (NED dönüşümü yapılmıyor)
+    raw_x = (cx - w / 2) / (w / 2)   # pozitif = sağ
+    raw_y = (cy - h / 2) / (h / 2)   # pozitif = aşağı
 
-    return (offset_north, offset_east)
+    if save_debug:
+        try:
+            debug_frame = frame.copy()
+            colored = np.zeros_like(debug_frame)
+            colored[mask > 0] = (0, 255, 0)
+            debug_frame = cv2.addWeighted(debug_frame, 0.7, colored, 0.3, 0)
+            cv2.circle(debug_frame, (int(cx), int(cy)), 10, (0, 0, 255), 3)
+            cv2.circle(debug_frame, (w // 2, h // 2), 8, (255, 255, 255), 2)
+            txt = f"rx={raw_x:.3f} ry={raw_y:.3f} px=({int(cx)},{int(cy)}) cnt={colored_px}"
+            cv2.putText(debug_frame, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            path = f"/tmp/align_debug_{debug_tag}.png"
+            cv2.imwrite(path, debug_frame)
+            log.info(f"  🔍 DEBUG {debug_tag}: {txt} → {path}")
+        except Exception as e:
+            log.warning(f"  Debug frame kayıt hatası: {e}")
+
+    return (raw_x, raw_y)

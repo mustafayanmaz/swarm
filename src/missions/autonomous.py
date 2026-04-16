@@ -238,11 +238,18 @@ async def move_to_with_color_scan(ctrl, target_ne, cameras, detected_zones):
                 if frame is not None:
                     color = detect_color_zone(frame)
                     if color and color not in detected_zones:
-                        # İlk tespit — koordinatı kaydet
-                        detected_zones[color] = tuple(ctrl.swarm_center)
+                        # Algılayan drone'un gerçek NED pozisyonunu hesapla
+                        # (swarm center değil — formasyon offset'i dahil)
+                        targets = ctrl._get_global_targets()
+                        if cam_id in targets:
+                            drone_n, drone_e = targets[cam_id][0], targets[cam_id][1]
+                            detected_zones[color] = (drone_n, drone_e)
+                        else:
+                            detected_zones[color] = tuple(ctrl.swarm_center)
+                        pos = detected_zones[color]
                         log.info(
                             f"  🎨 KAMERA (Drone {cam_id}): {color} alan tespit edildi! "
-                            f"NED=({ctrl.swarm_center[0]:.1f}, {ctrl.swarm_center[1]:.1f})"
+                            f"NED=({pos[0]:.1f}, {pos[1]:.1f})"
                         )
             await asyncio.sleep(scan_interval)
 
