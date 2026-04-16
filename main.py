@@ -13,7 +13,12 @@ import logging
 import sys
 from datetime import datetime, timezone
 
-from src.config import DRONE_PORTS, GRPC_BASE_PORT
+from src.config import (
+    DRONE_PORTS,
+    GRPC_BASE_PORT,
+    INCIDENT_LOG_ENABLED,
+    INCIDENT_LOG_PATH,
+)
 from src.swarm_controller import SwarmController
 
 logging.basicConfig(
@@ -117,11 +122,16 @@ async def main():
         except Exception:
             pass
     finally:
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        output_path = ctrl.incident_log.save_json(f"logs/incidents_{timestamp}.json")
-        summary = ctrl.incident_log.summary()
-        log.info("Incident log kaydedildi: %s", output_path)
-        log.info("Incident özeti: toplam=%s kodlar=%s", summary["total_incidents"], summary["by_code"])
+        if INCIDENT_LOG_ENABLED:
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            output_path = ctrl.incident_log.save_json(INCIDENT_LOG_PATH.format(timestamp=timestamp))
+            summary = ctrl.incident_log.summary()
+            log.info("Incident log kaydedildi: %s", output_path)
+            log.info(
+                "Incident özeti: toplam=%s kodlar=%s",
+                summary["total_incidents"],
+                summary["by_code"],
+            )
 
 
 if __name__ == "__main__":

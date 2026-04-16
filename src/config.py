@@ -242,3 +242,43 @@ QR_CONTENTS = {
         },
     },
 }
+
+
+# --- Failsafe / Safety Parametreleri ---
+
+# Çarpışma minimum mesafe (drone-drone)
+COLLISION_CHECK_ENABLED = True
+COLLISION_MIN_DISTANCE_M = 2.0
+COLLISION_VIOLATION_ACTION = "hold"  # hold | abort
+
+# Formasyon güvenlik zarfı (arena sınırları)
+FORMATION_ENVELOPE_ENABLED = True
+ARENA_NORTH_MIN_M = -35.0
+ARENA_NORTH_MAX_M = 35.0
+ARENA_EAST_MIN_M = -5.0
+ARENA_EAST_MAX_M = 65.0
+FORMATION_SAFETY_MARGIN_M = 2.0
+ENVELOPE_VIOLATION_ACTION = "hold"  # hold | abort
+
+# Kamera sağlık ve algı güvenilirliği
+CAMERA_HEALTH_ENABLED = True
+CAMERA_FRAME_TIMEOUT_S = 2.0
+CAMERA_MIN_CONFIDENCE_PCT = 2.0
+QR_READ_MAX_ATTEMPTS = 10
+
+# Drift / suruklenme
+DRIFT_FAILSAFE_ENABLED = True
+DRIFT_MAX_DISTANCE_M = 3.0
+DRIFT_HOLD_SECONDS = 3.0
+DRIFT_ACTION = "hold"  # hold | rtl
+
+# İniş alanı uygunluk
+LANDING_ZONE_VALIDATION_ENABLED = True
+LANDING_ZONE_MIN_DETECTIONS = 3
+LANDING_ZONE_MIN_CONFIDENCE_PCT = 2.0
+LANDING_ZONE_MAX_MOTION_RATIO = 0.15
+LANDING_ZONE_ACTION = "abort"  # hold | abort
+
+# Incident loglama
+INCIDENT_LOG_ENABLED = True
+INCIDENT_LOG_PATH = "logs/incidents_{timestamp}.json"
