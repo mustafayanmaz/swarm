@@ -11,6 +11,7 @@ Kamera ile QR okuma, renkli alan tespiti, dinamik formasyon değişimi destekler
 Swarm_3 tarafında sim ve gerçek ortamda ayni karar zinciri ile calisan fail-safe katmani eklendi.
 
 - C001: Drone-drone minimum mesafe ihlali (hold/abort)
+- C002: Drone-obstacle proxy (arena sinirina yakinlik) min mesafe ihlali
 - F001: Formasyon guvenlik zarfi (arena siniri) ihlali
 - H001: Kamera frame timeout
 - H002: Dusuk kamera/QR guven skoru
