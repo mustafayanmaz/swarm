@@ -13,6 +13,7 @@ class IncidentCode:
     """Canonical incident code list used across swarm failsafe checks."""
 
     COLLISION_MIN_DISTANCE = "C001"
+    COLLISION_OBSTACLE_DISTANCE = "C002"
     FORMATION_ENVELOPE_VIOLATION = "F001"
     CAMERA_FRAME_TIMEOUT = "H001"
     CAMERA_CONFIDENCE_LOW = "H002"
