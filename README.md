@@ -19,16 +19,20 @@ swarm/
 │   ├── swarm_controller.py    # Ana sürü kontrolcüsü (MAVSDK)
 │   ├── camera.py              # Gazebo kamera → OpenCV frame (gz-transport13)
 │   ├── detection.py           # QR okuma (pyzbar + OpenCV) + renkli alan tespiti (HSV)
+│   ├── input_manager.py       # Joystick / Klavye girdi yönetimi (pygame)
 │   ├── missions/
 │   │   ├── autonomous.py      # Görev 5.1 — Otonom dinamik sürü
-│   │   └── semi_auto.py       # Görev 5.2 — Yarı otonom klavye kontrol
+│   │   └── semi_auto.py       # Görev 5.2 — Yarı otonom sürü kontrol
 │   └── arena/
 │       └── generate.py        # Gazebo world + QR/zone PNG oluşturucu
 ├── scripts/
-│   └── launch_sim.sh          # 3 drone + Gazebo başlatıcı (NVIDIA PRIME destekli)
+│   ├── launch_sim.sh          # Görev 5.1 — 3 drone + Gazebo başlatıcı
+│   └── launch_sim_semi.sh     # Görev 5.2 — 3 drone + Gazebo başlatıcı
 ├── gazebo/                    # generate.py tarafından otomatik üretilir
 │   ├── textures/              # QR PNG'leri (2048x2048) + zone PNG'leri
-│   └── worlds/                # swarm_arena.sdf
+│   └── worlds/
+│       ├── swarm_arena.sdf    # Görev 5.1 world (QR + iniş bölgeleri)
+│       └── semi_arena.sdf     # Görev 5.2 world (sade arena)
 ├── requirements.txt
 └── README.md
 ```
@@ -134,6 +138,7 @@ pip install -r requirements.txt
 - `pyzbar` — QR kod okuma (libzbar gerektirir)
 - `qrcode`, `Pillow` — QR PNG üretimi (arena)
 - `numpy` — Matris işlemleri
+- `pygame` — Joystick/klavye girdisi (Görev 5.2)
 
 ### 6. gz-transport Python bağlantısı (kamera için)
 
@@ -172,23 +177,35 @@ Bu komut:
 
 ## Simülasyonu Çalıştırma
 
-### Yöntem A: launch_sim.sh ile (önerilen)
+### Görev 5.1 — launch_sim.sh
 
 ```bash
 cd ~/Desktop/swarm
-chmod +x scripts/launch_sim.sh
-./scripts/launch_sim.sh
+bash scripts/launch_sim.sh
 ```
 
 Bu script:
 1. Önceki PX4/Gazebo süreçlerini temizler (`pkill`)
 2. NVIDIA PRIME offload ortam değişkenlerini ayarlar
-3. Gazebo'yu `swarm_arena.sdf` world ile başlatır
+3. Gazebo'yu `swarm_arena.sdf` world ile başlatır (QR paneller, iniş bölgeleri, rota çizgileri)
 4. 3 PX4 SITL instance'ı sırayla başlatır (`x500_mono_cam_down`, airframe 4014)
+
+### Görev 5.2 — launch_sim_semi.sh
+
+```bash
+cd ~/Desktop/swarm
+bash scripts/launch_sim_semi.sh
+```
+
+Bu script:
+1. Görev 5.1 ile aynı yapı, farklı world dosyası (`semi_arena.sdf`) kullanır
+2. Sade arena — QR panel ve iniş bölgesi yok, sadece uçuş alanı
+3. 3 PX4 SITL instance'ı sırayla başlatır (`x500_mono_cam_down`, airframe 4014)
 
 **GUI'siz çalıştırma (headless):**
 ```bash
-./scripts/launch_sim.sh headless
+bash scripts/launch_sim.sh headless
+bash scripts/launch_sim_semi.sh headless
 ```
 
 ### Yöntem B: Manuel başlatma
@@ -229,7 +246,7 @@ PX4_SYS_AUTOSTART=4014 PX4_GZ_MODEL_POSE="0,6,0,0,0,0" \
 
 ## Görevleri Çalıştırma
 
-Simülasyon çalışırken **ayrı bir terminalde**:
+Simülasyon çalışırken (~30 saniye bekle, FDM portları bağlansın) **ayrı bir terminalde**:
 
 ```bash
 cd ~/Desktop/swarm
@@ -239,8 +256,7 @@ source venv/bin/activate
 ### Görev 5.1 — Otonom Dinamik Sürü
 
 ```bash
-cd src/missions
-python autonomous.py
+python main.py mission
 ```
 
 **Görev akışı:**
@@ -264,23 +280,60 @@ python autonomous.py
 - Tespit anındaki sürü merkezi NED koordinatı kaydedilir
 - İniş için bu koordinatlar kullanılır
 
-### Görev 5.2 — Yarı Otonom Kontrol
+### Görev 5.2 — Yarı Otonom Sürü Kontrolü
 
 ```bash
-cd src/missions
-python semi_auto.py
+python main.py semi
 ```
+
+**Görev akışı:**
+1. Pygame penceresi açılır (joystick varsa gamepad, yoksa klavye modu)
+2. `T` ile sürü çizgi formasyonunda kalkış (6m)
+3. Stick/tuşlarla sürüyü formasyon halinde yönlendir
+4. Formasyon değiştir, manevra yap
+5. `L` ile eve dön + sürü halinde iniş
+
+**İki kontrol modu (`M` ile geçiş):**
+
+| Mod | Stick fonksiyonu | Açıklama |
+|-----|-----------------|----------|
+| **Hareket** (varsayılan) | `apply_velocity()` | Sürüyü bir bütün olarak hareket ettirir (ileri/geri/sağ/sol) |
+| **Manevra** | `apply_tilt()` | Sürünün eğim açısını kontrol eder (pitch/roll) — gösteri manevrası |
+
+Mod değiştirildiğinde eğim açıları otomatik sıfırlanır.
+
+**Klavye kontrolleri:**
 
 | Tuş | İşlev |
 |-----|-------|
 | `T` | Kalkış |
+| `L` | Eve dön + iniş |
+| `M` | Mod değiştir (Hareket ↔ Manevra) |
 | `W/A/S/D` | İleri / Sol / Geri / Sağ |
 | `Q/E` | Yaw sol / sağ |
 | `R/F` | İrtifa artır / azalt |
 | `1/2/3` | Çizgi / Ok Başı / V formasyonu |
-| `P/I` | Pitch +15° / -15° |
-| `O/U` | Roll +15° / -15° |
-| `L` | Eve dön + iniş |
+| `P/I` | Pitch +15° / -15° manevrası |
+| `O/U` | Roll +15° / -15° manevrası |
+| `ESC` | Çıkış |
+
+**Gamepad kontrolleri (Xbox/PS layout):**
+
+| Buton / Stick | İşlev |
+|---------------|-------|
+| Sol Stick Y | Pitch (ileri/geri) |
+| Sol Stick X | Roll (sol/sağ) |
+| Sağ Stick X | Yaw (dönüş) |
+| Sağ Stick Y | Throttle (irtifa) |
+| A / Cross | Kalkış |
+| B / Circle | İniş |
+| X / Square | Mod değiştir |
+| LB / L1 | Önceki formasyon |
+| RB / R1 | Sonraki formasyon |
+| D-Pad | Pitch/Roll manevrası |
+| Start | Çıkış |
+
+> **Not:** Pygame penceresi aktif (fokuslu) olmalıdır, aksi takdirde tuş basımları algılanmaz.
 
 ---
 
