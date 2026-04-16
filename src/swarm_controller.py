@@ -9,6 +9,7 @@ import logging
 import math
 import os
 import sys
+import time
 from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,6 +37,15 @@ from src.config import (
     ARENA_EAST_MAX_M,
     FORMATION_SAFETY_MARGIN_M,
     ENVELOPE_VIOLATION_ACTION,
+    DRIFT_FAILSAFE_ENABLED,
+    DRIFT_MAX_DISTANCE_M,
+    DRIFT_HOLD_SECONDS,
+    DRIFT_ACTION,
+    LANDING_ZONE_VALIDATION_ENABLED,
+    LANDING_ZONE_MIN_DETECTIONS,
+    LANDING_ZONE_MIN_CONFIDENCE_PCT,
+    LANDING_ZONE_MAX_MOTION_RATIO,
+    LANDING_ZONE_ACTION,
 )
 from src.incidents import IncidentCode, IncidentLog
 
@@ -81,6 +91,8 @@ class SwarmController:
         self._abort_active: bool = False
         self._collision_violation_active: bool = False
         self._envelope_violation_active: bool = False
+        self._drift_violation_active: bool = False
+        self._last_drift_check_s: float = 0.0
 
     def _snapshot_state(self) -> Dict[str, object]:
         """Current swarm state snapshot for incident records."""
@@ -289,6 +301,67 @@ class SwarmController:
         self._envelope_violation_active = False
         return True
 
+    async def _run_drift_check(self) -> bool:
+        """Telemetry-based drift check against commanded swarm targets."""
+        if not DRIFT_FAILSAFE_ENABLED or self._abort_active:
+            return True
+
+        now_s = time.monotonic()
+        if now_s - self._last_drift_check_s < 1.0:
+            return True
+        self._last_drift_check_s = now_s
+
+        targets = self._get_global_targets()
+        max_drift = 0.0
+        max_did: Optional[int] = None
+
+        for aid in self.active_agents:
+            try:
+                async for pv in self.drones[aid].telemetry.position_velocity_ned():
+                    cur_local_n = pv.position.north_m
+                    cur_local_e = pv.position.east_m
+                    break
+                else:
+                    continue
+            except Exception:
+                continue
+
+            hn, he = self.home_offsets.get(aid, (0.0, 0.0))
+            cur_global_n = hn + cur_local_n
+            cur_global_e = he + cur_local_e
+            tgt_n, tgt_e = targets[aid][0], targets[aid][1]
+            drift = math.hypot(cur_global_n - tgt_n, cur_global_e - tgt_e)
+
+            if drift > max_drift:
+                max_drift = drift
+                max_did = aid
+
+        if max_drift <= DRIFT_MAX_DISTANCE_M:
+            self._drift_violation_active = False
+            return True
+
+        if self._drift_violation_active:
+            return False
+        self._drift_violation_active = True
+
+        if DRIFT_ACTION == "rtl":
+            action = "abort"
+            self._activate_abort("drift_excessive")
+        else:
+            action = "hold"
+            self._activate_hold("drift_excessive")
+
+        self.record_incident(
+            code=IncidentCode.DRIFT_EXCESSIVE,
+            action_taken=action,
+            drone_id=max_did,
+            details=(
+                f"drift={max_drift:.2f}m threshold={DRIFT_MAX_DISTANCE_M:.2f}m "
+                f"policy={DRIFT_ACTION}"
+            ),
+        )
+        return False
+
     # ─── BAĞLANTI ─────────────────────────────────────────────
 
     async def connect(self, ports: List[str], grpc_base_port: int = 50040):
@@ -415,6 +488,7 @@ class SwarmController:
                     targets = self._get_global_targets()
                     self._run_collision_check(targets)
                     self._run_envelope_check()
+                    await self._run_drift_check()
                 await self.send_positions()
             except Exception:
                 pass
@@ -732,6 +806,10 @@ class SwarmController:
             log.warning(f"[Drone {agent_id}] Aktif değil, çıkarılamaz!")
             return
 
+        if self._abort_active:
+            log.error(f"[Drone {agent_id}] ABORT aktif, remove_agent atlandı.")
+            return
+
         log.info(
             f"[Drone {agent_id}] Sürüden çıkarılıyor → "
             f"İniş: ({landing_ne[0]:.1f}, {landing_ne[1]:.1f})"
@@ -766,9 +844,11 @@ class SwarmController:
             await drone.offboard.set_position_ned(landing_cmd)
             await asyncio.sleep(0.1)
 
+        landing_allowed = True
+
         # 2) Kamera ile renkli alana hizalan (ampirik kalibrasyon)
         if cameras is not None and target_color is not None:
-            from src.detection import detect_color_offset
+            from src.detection import detect_color_offset, detect_color_zone, detect_motion_ratio
             import math
 
             log.info(f"[Drone {agent_id}] 📷 Renkli alan hizalama: {target_color}")
@@ -843,7 +923,7 @@ class SwarmController:
             # ── Hizalama döngüsü ──
             if calib_ok:
                 MAX_ITERS = 30
-                MAX_DRIFT = 3.0
+                MAX_DRIFT = DRIFT_MAX_DISTANCE_M
                 gain = 0.5
                 initial_n, initial_e = cur_n, cur_e
 
@@ -891,6 +971,16 @@ class SwarmController:
 
                     if drift > MAX_DRIFT:
                         log.warning(f"[Drone {agent_id}] ⚠ Drift sınırı ({drift:.1f}m)")
+                        self.record_incident(
+                            code=IncidentCode.DRIFT_EXCESSIVE,
+                            action_taken="landing_cancelled",
+                            drone_id=agent_id,
+                            details=(
+                                f"alignment_drift={drift:.2f}m "
+                                f"threshold={MAX_DRIFT:.2f}m"
+                            ),
+                        )
+                        landing_allowed = False
                         break
 
                     cur_n = new_n
@@ -911,7 +1001,59 @@ class SwarmController:
                 await drone.offboard.set_position_ned(landing_cmd)
                 await asyncio.sleep(0.1)
 
+            if landing_allowed and LANDING_ZONE_VALIDATION_ENABLED:
+                frame1 = cameras.get_frame(agent_id)
+                await asyncio.sleep(0.2)
+                frame2 = cameras.get_frame(agent_id)
+                zone_ok = False
+                confidence = 0.0
+                motion_ratio = detect_motion_ratio(frame1, frame2)
+                zone_result = detect_color_zone(frame2, return_confidence=True) if frame2 is not None else None
+                if zone_result is not None:
+                    found_color, confidence = zone_result
+                    zone_ok = (
+                        found_color == target_color
+                        and confidence >= LANDING_ZONE_MIN_CONFIDENCE_PCT
+                        and motion_ratio <= LANDING_ZONE_MAX_MOTION_RATIO
+                    )
+
+                if not zone_ok:
+                    self.record_incident(
+                        code=IncidentCode.LANDING_ZONE_UNSUITABLE,
+                        action_taken="landing_cancelled",
+                        drone_id=agent_id,
+                        details=(
+                            f"target={target_color} confidence={confidence:.2f} "
+                            f"min_conf={LANDING_ZONE_MIN_CONFIDENCE_PCT:.2f} "
+                            f"motion={motion_ratio:.3f} max_motion={LANDING_ZONE_MAX_MOTION_RATIO:.3f}"
+                        ),
+                    )
+                    landing_allowed = False
+
             self._landing_positions[agent_id] = (cur_n + hn, cur_e + he)
+
+        if not landing_allowed:
+            if LANDING_ZONE_ACTION == "abort":
+                self._activate_abort("landing_zone_or_drift_violation")
+            else:
+                self._activate_hold("landing_zone_or_drift_violation")
+
+            hold_cmd = PositionNedYaw(cur_n, cur_e, -self.altitude, 0.0)
+            hold_cycles = int(max(1.0, DRIFT_HOLD_SECONDS) * 10)
+            for _ in range(hold_cycles):
+                await drone.offboard.set_position_ned(hold_cmd)
+                await asyncio.sleep(0.1)
+
+            if agent_id in self.removed_agents:
+                self.removed_agents.remove(agent_id)
+            if agent_id not in self.active_agents:
+                self.active_agents.append(agent_id)
+                self.active_agents.sort()
+
+            log.warning(
+                f"[Drone {agent_id}] İniş iptal edildi, drone güvenli beklemede ve sürüye geri alındı."
+            )
+            return
 
         # 3) Offboard durdur ve iniş komutu ver
         log.info(f"[Drone {agent_id}] İniş başlıyor...")

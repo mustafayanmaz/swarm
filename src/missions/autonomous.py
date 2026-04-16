@@ -38,10 +38,13 @@ from src.config import (
     CAMERA_FRAME_TIMEOUT_S,
     CAMERA_MIN_CONFIDENCE_PCT,
     QR_READ_MAX_ATTEMPTS,
+    LANDING_ZONE_MIN_DETECTIONS,
+    LANDING_ZONE_MIN_CONFIDENCE_PCT,
+    LANDING_ZONE_MAX_MOTION_RATIO,
 )
 from src.swarm_controller import SwarmController
 from src.camera import SwarmCameras
-from src.detection import detect_qr, detect_color_zone
+from src.detection import detect_qr, detect_color_zone, detect_motion_ratio
 from src.incidents import IncidentCode
 
 log = logging.getLogger("swarm")
@@ -244,8 +247,25 @@ async def execute_qr_mission(
         # Önce kamera ile tespit edilen konumu kullan, yoksa config fallback
         landing_zone = None
         if detected_zones and renk in detected_zones:
-            landing_zone = detected_zones[renk]
-            log.info(f"  ▶ {renk} bölge KAMERA ile tespit edilmişti: {landing_zone}")
+            zone = detected_zones[renk]
+            if (
+                zone["detections"] >= LANDING_ZONE_MIN_DETECTIONS
+                and zone["avg_confidence"] >= LANDING_ZONE_MIN_CONFIDENCE_PCT
+                and zone["max_motion_ratio"] <= LANDING_ZONE_MAX_MOTION_RATIO
+            ):
+                landing_zone = zone["position"]
+                log.info(f"  ▶ {renk} bölge KAMERA ile doğrulandı: {landing_zone}")
+            else:
+                ctrl.record_incident(
+                    code=IncidentCode.LANDING_ZONE_UNSUITABLE,
+                    action_taken="fallback_config_zone",
+                    details=(
+                        f"color={renk} detections={zone['detections']} "
+                        f"avg_conf={zone['avg_confidence']:.2f} "
+                        f"max_motion={zone['max_motion_ratio']:.3f}"
+                    ),
+                )
+                log.warning(f"  ⚠ {renk} bölge suitability yetersiz, config fallback kullanılacak")
         else:
             landing_zone = LANDING_ZONES.get(renk)
             if landing_zone:
@@ -289,25 +309,47 @@ async def move_to_with_color_scan(ctrl, target_ne, cameras, detected_zones):
 
     # Hareket süresince renkli alan taraması (tüm kameralar)
     if cameras is not None:
+        prev_frames = {}
         scan_interval = 0.1  # saniye (3m/s hızda 0.3m arayla tarama)
         while not move_task.done():
             for cam_id in range(cameras.num_drones):
                 frame = cameras.get_frame(cam_id)
                 if frame is not None:
-                    color = detect_color_zone(frame)
-                    if color and color not in detected_zones:
+                    motion_ratio = detect_motion_ratio(prev_frames.get(cam_id), frame)
+                    prev_frames[cam_id] = frame
+                    result = detect_color_zone(frame, return_confidence=True)
+                    if result:
+                        color, confidence = result
                         # Algılayan drone'un gerçek NED pozisyonunu hesapla
                         # (swarm center değil — formasyon offset'i dahil)
                         targets = ctrl._get_global_targets()
                         if cam_id in targets:
-                            drone_n, drone_e = targets[cam_id][0], targets[cam_id][1]
-                            detected_zones[color] = (drone_n, drone_e)
+                            zone_pos = (targets[cam_id][0], targets[cam_id][1])
                         else:
-                            detected_zones[color] = tuple(ctrl.swarm_center)
-                        pos = detected_zones[color]
+                            zone_pos = tuple(ctrl.swarm_center)
+
+                        if color not in detected_zones:
+                            detected_zones[color] = {
+                                "position": zone_pos,
+                                "detections": 1,
+                                "avg_confidence": confidence,
+                                "max_motion_ratio": motion_ratio,
+                            }
+                        else:
+                            zone = detected_zones[color]
+                            det = zone["detections"] + 1
+                            zone["avg_confidence"] = (
+                                (zone["avg_confidence"] * zone["detections"]) + confidence
+                            ) / det
+                            zone["detections"] = det
+                            zone["position"] = zone_pos
+                            zone["max_motion_ratio"] = max(zone["max_motion_ratio"], motion_ratio)
+
+                        zone = detected_zones[color]
                         log.info(
-                            f"  🎨 KAMERA (Drone {cam_id}): {color} alan tespit edildi! "
-                            f"NED=({pos[0]:.1f}, {pos[1]:.1f})"
+                            f"  🎨 KAMERA (Drone {cam_id}): {color} tespit "
+                            f"NED=({zone_pos[0]:.1f}, {zone_pos[1]:.1f}) "
+                            f"conf={confidence:.1f} det={zone['detections']} motion={motion_ratio:.3f}"
                         )
             await asyncio.sleep(scan_interval)
 
@@ -337,7 +379,7 @@ async def run_autonomous_mission(ctrl: SwarmController, cameras=None):
     current_qr = FIRST_QR
     visited = []
     step = 0
-    detected_zones = {}  # {"kirmizi": (N, E), "mavi": (N, E)}
+    detected_zones = {}  # {"kirmizi": {position,detections,avg_confidence,max_motion_ratio}, ...}
 
     while current_qr != 0:
         step += 1
