@@ -1036,16 +1036,19 @@ class SwarmController:
 
                     if drift > MAX_DRIFT:
                         log.warning(f"[Drone {agent_id}] ⚠ Drift sınırı ({drift:.1f}m)")
+                        action_taken = "landing_warn"
+                        if LANDING_ZONE_ACTION in ("hold", "abort"):
+                            action_taken = "landing_cancelled"
+                            landing_allowed = False
                         self.record_incident(
                             code=IncidentCode.DRIFT_EXCESSIVE,
-                            action_taken="landing_cancelled",
+                            action_taken=action_taken,
                             drone_id=agent_id,
                             details=(
                                 f"alignment_drift={drift:.2f}m "
                                 f"threshold={MAX_DRIFT:.2f}m"
                             ),
                         )
-                        landing_allowed = False
                         break
 
                     cur_n = new_n
@@ -1083,9 +1086,13 @@ class SwarmController:
                     )
 
                 if not zone_ok:
+                    action_taken = "landing_warn"
+                    if LANDING_ZONE_ACTION in ("hold", "abort"):
+                        action_taken = "landing_cancelled"
+                        landing_allowed = False
                     self.record_incident(
                         code=IncidentCode.LANDING_ZONE_UNSUITABLE,
-                        action_taken="landing_cancelled",
+                        action_taken=action_taken,
                         drone_id=agent_id,
                         details=(
                             f"target={target_color} confidence={confidence:.2f} "
@@ -1093,7 +1100,6 @@ class SwarmController:
                             f"motion={motion_ratio:.3f} max_motion={LANDING_ZONE_MAX_MOTION_RATIO:.3f}"
                         ),
                     )
-                    landing_allowed = False
 
             self._landing_positions[agent_id] = (cur_n + hn, cur_e + he)
 

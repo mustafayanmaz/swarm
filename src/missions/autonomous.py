@@ -277,11 +277,16 @@ async def execute_qr_mission(
             log.info(f"  ▶ Drone {drone_id} sürüden ayrılıyor → {renk} bölge")
             await ctrl.remove_agent(drone_id, landing_zone, cameras=cameras, target_color=renk)
 
-            log.info(f"  ▶ Drone {drone_id} yerde bekliyor ({bekle}s)...")
-            await asyncio.sleep(bekle)
+            if drone_id in ctrl.removed_agents:
+                log.info(f"  ▶ Drone {drone_id} yerde bekliyor ({bekle}s)...")
+                await asyncio.sleep(bekle)
 
-            log.info(f"  ▶ Drone {drone_id} sürüye geri katılıyor...")
-            await ctrl.add_agent(drone_id)
+                log.info(f"  ▶ Drone {drone_id} sürüye geri katılıyor...")
+                await ctrl.add_agent(drone_id)
+            else:
+                log.info(
+                    f"  ▶ Drone {drone_id} remove/add döngüsü atlandı (iniş iptali veya aktif durumda)."
+                )
 
     # ── 5) Bekleme ──
     bekle_s = gorev.get("bekleme_suresi_s", 0)
