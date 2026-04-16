@@ -6,6 +6,28 @@ Kamera ile QR okuma, renkli alan tespiti, dinamik formasyon değişimi destekler
 - **Görev 5.1** — Otonom dinamik sürü (QR rota takibi, formasyon, manevra, iniş)
 - **Görev 5.2** — Yarı otonom klavye kontrol
 
+## Failsafe Paketi (Yeni)
+
+Swarm_3 tarafında sim ve gerçek ortamda ayni karar zinciri ile calisan fail-safe katmani eklendi.
+
+- C001: Drone-drone minimum mesafe ihlali (hold/abort)
+- F001: Formasyon guvenlik zarfi (arena siniri) ihlali
+- H001: Kamera frame timeout
+- H002: Dusuk kamera/QR guven skoru
+- H003: QR okuma basarisizligi (attempt/time budget dolumu)
+- W001: Drift/suruklenme esik asimi
+- L001: Inis alani uygun degil (renk guveni/hareket/stabilite)
+
+Tetiklenen her olay gorev sonunda JSON olarak kaydedilir:
+
+- logs/incidents_<timestamp>.json
+
+Notlar:
+
+- Sim ve gercekte ayni esikler ve ayni fail-safe akis kullanilir.
+- Inmis-kalkmis gibi devam davranisi yoktur.
+- Ihlallerde varsayilan akis hold + sinirli tekrar + gerekirse abort/RTL'dir.
+
 ---
 
 ## Proje Yapısı

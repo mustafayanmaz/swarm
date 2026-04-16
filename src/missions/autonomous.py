@@ -382,6 +382,13 @@ async def run_autonomous_mission(ctrl: SwarmController, cameras=None):
     detected_zones = {}  # {"kirmizi": {position,detections,avg_confidence,max_motion_ratio}, ...}
 
     while current_qr != 0:
+        if ctrl.abort_active:
+            log.error("Failsafe ABORT aktif, QR döngüsü sonlandırılıyor.")
+            break
+        if ctrl.hold_active:
+            log.warning("Failsafe HOLD aktif, QR döngüsü sonlandırılıyor.")
+            break
+
         step += 1
         qr_pos = QR_POSITIONS.get(current_qr)
         if qr_pos is None:
@@ -397,6 +404,9 @@ async def run_autonomous_mission(ctrl: SwarmController, cameras=None):
 
         # QR noktasına git — hareket sırasında kamera ile renk taraması
         await move_to_with_color_scan(ctrl, qr_pos, cameras, detected_zones)
+        if ctrl.abort_active or ctrl.hold_active:
+            log.error("Failsafe tetiklendi, görev akışı güvenli kapanışa alınıyor.")
+            break
 
         # QR'ı oku (alçal → kamera → yüksel, fallback config)
         content = await read_qr(current_qr, ctrl, cameras)
@@ -406,6 +416,9 @@ async def run_autonomous_mission(ctrl: SwarmController, cameras=None):
 
         # Görevleri icra et
         await execute_qr_mission(ctrl, content, cameras, detected_zones)
+        if ctrl.abort_active or ctrl.hold_active:
+            log.error("Failsafe tetiklendi, görev akışı güvenli kapanışa alınıyor.")
+            break
 
         # Bir sonraki QR
         visited.append(current_qr)
