@@ -659,6 +659,94 @@ class SwarmController:
 
         log.info(f"[Drone {agent_id}] Sürüye geri katıldı.")
 
+    # ─── SÜREKLI HAREKET (Görev 5.2) ─────────────────────────
+
+    def apply_velocity(self, pitch: float, roll: float, yaw: float, throttle: float, dt: float):
+        """
+        Input stick değerlerini sürü merkezine uygula (Sürü Hareket Modu).
+        Formasyon heading'e göre ileri/geri/sağ/sol hareket.
+
+        Args:
+            pitch: -1..+1 (ileri/geri — heading yönünde)
+            roll: -1..+1 (sağ/sol — heading'e dik)
+            yaw: -1..+1 (sürü merkezi sabit, formasyon rotasyonu)
+            throttle: -1..+1 (irtifa)
+            dt: frame süresi (saniye)
+        """
+        MOVE_SPEED = 5.0    # m/s max
+        ALT_SPEED = 3.0     # m/s max
+        YAW_SPEED = 45.0    # derece/s max
+
+        # İleri/geri (heading yönünde)
+        if abs(pitch) > 0.01:
+            speed = pitch * MOVE_SPEED * dt
+            self.swarm_center = (
+                self.swarm_center[0] + speed * math.cos(self.formation_heading),
+                self.swarm_center[1] + speed * math.sin(self.formation_heading),
+            )
+
+        # Sağ/sol (heading'e dik)
+        if abs(roll) > 0.01:
+            speed = roll * MOVE_SPEED * dt
+            self.swarm_center = (
+                self.swarm_center[0] + speed * math.cos(self.formation_heading + math.pi / 2),
+                self.swarm_center[1] + speed * math.sin(self.formation_heading + math.pi / 2),
+            )
+
+        # Yaw → formasyon rotasyonu (sürü merkezi sabit)
+        if abs(yaw) > 0.01:
+            self.formation_heading += math.radians(yaw * YAW_SPEED * dt)
+
+        # Throttle → irtifa
+        if abs(throttle) > 0.01:
+            self.altitude += throttle * ALT_SPEED * dt
+            self.altitude = max(3.0, min(50.0, self.altitude))
+
+    def apply_tilt(self, pitch: float, roll: float, yaw: float, throttle: float, dt: float):
+        """
+        Input stick değerlerini formasyon eğimine uygula (Manevra Modu).
+        Sürü merkezi sabit kalır, formasyona pitch/roll/yaw eğimi verilir.
+
+        Args:
+            pitch: -1..+1 (formasyon pitch eğimi)
+            roll: -1..+1 (formasyon roll eğimi)
+            yaw: -1..+1 (formasyon rotasyonu)
+            throttle: -1..+1 (irtifa)
+            dt: frame süresi (saniye)
+        """
+        MAX_TILT = 25.0     # derece max eğim
+        TILT_SPEED = 30.0   # derece/s
+        YAW_SPEED = 45.0    # derece/s
+        ALT_SPEED = 3.0     # m/s
+
+        # Pitch eğim
+        if abs(pitch) > 0.01:
+            self.pitch_angle += pitch * TILT_SPEED * dt
+            self.pitch_angle = max(-MAX_TILT, min(MAX_TILT, self.pitch_angle))
+        else:
+            # Stick bırakıldığında yavaşça düze dön
+            self.pitch_angle *= max(0.0, 1.0 - 3.0 * dt)
+            if abs(self.pitch_angle) < 0.5:
+                self.pitch_angle = 0.0
+
+        # Roll eğim
+        if abs(roll) > 0.01:
+            self.roll_angle += roll * TILT_SPEED * dt
+            self.roll_angle = max(-MAX_TILT, min(MAX_TILT, self.roll_angle))
+        else:
+            self.roll_angle *= max(0.0, 1.0 - 3.0 * dt)
+            if abs(self.roll_angle) < 0.5:
+                self.roll_angle = 0.0
+
+        # Yaw → formasyon rotasyonu
+        if abs(yaw) > 0.01:
+            self.formation_heading += math.radians(yaw * YAW_SPEED * dt)
+
+        # Throttle → irtifa
+        if abs(throttle) > 0.01:
+            self.altitude += throttle * ALT_SPEED * dt
+            self.altitude = max(3.0, min(50.0, self.altitude))
+
     # ─── YARDIMCI ─────────────────────────────────────────────
 
     async def hold(self, seconds: float):

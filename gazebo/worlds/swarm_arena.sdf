@@ -300,7 +300,7 @@
             <specular>0 0 0 1</specular>
             <pbr>
               <metal>
-                <albedo_map>/home/mehmetali/Desktop/swarm/gazebo/textures/qr1.png</albedo_map>
+                <albedo_map>/home/musyan/Desktop/swarm/gazebo/textures/qr1.png</albedo_map>
                 <metalness>0.0</metalness>
                 <roughness>1.0</roughness>
               </metal>
@@ -327,7 +327,7 @@
             <specular>0 0 0 1</specular>
             <pbr>
               <metal>
-                <albedo_map>/home/mehmetali/Desktop/swarm/gazebo/textures/qr2.png</albedo_map>
+                <albedo_map>/home/musyan/Desktop/swarm/gazebo/textures/qr2.png</albedo_map>
                 <metalness>0.0</metalness>
                 <roughness>1.0</roughness>
               </metal>
@@ -354,7 +354,7 @@
             <specular>0 0 0 1</specular>
             <pbr>
               <metal>
-                <albedo_map>/home/mehmetali/Desktop/swarm/gazebo/textures/qr3.png</albedo_map>
+                <albedo_map>/home/musyan/Desktop/swarm/gazebo/textures/qr3.png</albedo_map>
                 <metalness>0.0</metalness>
                 <roughness>1.0</roughness>
               </metal>
@@ -381,7 +381,7 @@
             <specular>0 0 0 1</specular>
             <pbr>
               <metal>
-                <albedo_map>/home/mehmetali/Desktop/swarm/gazebo/textures/qr4.png</albedo_map>
+                <albedo_map>/home/musyan/Desktop/swarm/gazebo/textures/qr4.png</albedo_map>
                 <metalness>0.0</metalness>
                 <roughness>1.0</roughness>
               </metal>
@@ -408,7 +408,7 @@
             <specular>0 0 0 1</specular>
             <pbr>
               <metal>
-                <albedo_map>/home/mehmetali/Desktop/swarm/gazebo/textures/qr5.png</albedo_map>
+                <albedo_map>/home/musyan/Desktop/swarm/gazebo/textures/qr5.png</albedo_map>
                 <metalness>0.0</metalness>
                 <roughness>1.0</roughness>
               </metal>
@@ -435,7 +435,7 @@
             <specular>0 0 0 1</specular>
             <pbr>
               <metal>
-                <albedo_map>/home/mehmetali/Desktop/swarm/gazebo/textures/qr6.png</albedo_map>
+                <albedo_map>/home/musyan/Desktop/swarm/gazebo/textures/qr6.png</albedo_map>
                 <metalness>0.0</metalness>
                 <roughness>1.0</roughness>
               </metal>
@@ -460,7 +460,7 @@
             <specular>0.1 0.1 0.1 1</specular>
             <pbr>
               <metal>
-                <albedo_map>/home/mehmetali/Desktop/swarm/gazebo/textures/zone_blue.png</albedo_map>
+                <albedo_map>/home/musyan/Desktop/swarm/gazebo/textures/zone_blue.png</albedo_map>
               </metal>
             </pbr>
           </material>
@@ -482,7 +482,7 @@
             <specular>0.1 0.1 0.1 1</specular>
             <pbr>
               <metal>
-                <albedo_map>/home/mehmetali/Desktop/swarm/gazebo/textures/zone_red.png</albedo_map>
+                <albedo_map>/home/musyan/Desktop/swarm/gazebo/textures/zone_red.png</albedo_map>
               </metal>
             </pbr>
           </material>

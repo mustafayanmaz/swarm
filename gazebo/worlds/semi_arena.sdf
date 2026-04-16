@@ -1,0 +1,1135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdf version="1.9">
+  <world name="default">
+    <physics type="ode">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>250</real_time_update_rate>
+    </physics>
+    <gravity>0 0 -9.8</gravity>
+    <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
+    <atmosphere type="adiabatic"/>
+    <scene>
+      <grid>false</grid>
+      <ambient>0.5 0.5 0.5 1</ambient>
+      <background>0.6 0.8 1.0 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>1 1</size></plane></geometry>
+          <surface><friction><ode/></friction><bounce/><contact/></surface>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>500 500</size></plane></geometry>
+          <material>
+            <ambient>0.35 0.48 0.25 1</ambient>
+            <diffuse>0.35 0.48 0.25 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia><ixx>1</ixx><ixy>0</ixy><ixz>0</ixz><iyy>1</iyy><iyz>0</iyz><izz>1</izz></inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
+    </model>
+
+    <light name="sunUTC" type="directional">
+      <pose>0 0 500 0 0 0</pose>
+      <cast_shadows>true</cast_shadows>
+      <intensity>1</intensity>
+      <direction>0.001 0.625 -0.78</direction>
+      <diffuse>0.904 0.904 0.904 1</diffuse>
+      <specular>0.271 0.271 0.271 1</specular>
+      <attenuation>
+        <range>2000</range><linear>0</linear><constant>1</constant><quadratic>0</quadratic>
+      </attenuation>
+      <spot><inner_angle>0</inner_angle><outer_angle>0</outer_angle><falloff>0</falloff></spot>
+    </light>
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>47.397971057728974</latitude_deg>
+      <longitude_deg>8.546163739800146</longitude_deg>
+      <elevation>0</elevation>
+    </spherical_coordinates>
+
+    <!-- HOME MARKER (yeşil daire) -->
+    <model name="home_marker">
+      <static>true</static>
+      <pose>0 0 0.005 0 0 0</pose>
+      <link name="link">
+        <visual name="v">
+          <geometry><cylinder><radius>2.0</radius><length>0.01</length></cylinder></geometry>
+          <material><ambient>0.2 0.8 0.2 0.9</ambient><diffuse>0.2 0.8 0.2 0.9</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- HOME İÇ DAIRE (beyaz) -->
+    <model name="home_inner">
+      <static>true</static>
+      <pose>0 0 0.006 0 0 0</pose>
+      <link name="link">
+        <visual name="v">
+          <geometry><cylinder><radius>0.5</radius><length>0.01</length></cylinder></geometry>
+          <material><ambient>1 1 1 0.9</ambient><diffuse>1 1 1 0.9</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+
+    <model name="grid_x_0"><static>true</static>
+      <pose>0 -40 0.002 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_x_10"><static>true</static>
+      <pose>0 -30 0.002 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_x_20"><static>true</static>
+      <pose>0 -20 0.002 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_x_30"><static>true</static>
+      <pose>0 -10 0.002 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_x_40"><static>true</static>
+      <pose>0 0 0.002 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.08 0.002</size></box></geometry>
+        <material><ambient>0.8 0.2 0.2 0.7</ambient><diffuse>0.8 0.2 0.2 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_x_50"><static>true</static>
+      <pose>0 10 0.002 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_x_60"><static>true</static>
+      <pose>0 20 0.002 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_x_70"><static>true</static>
+      <pose>0 30 0.002 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_x_80"><static>true</static>
+      <pose>0 40 0.002 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_y_0"><static>true</static>
+      <pose>-40 0 0.002 0 0 1.5708</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_y_10"><static>true</static>
+      <pose>-30 0 0.002 0 0 1.5708</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_y_20"><static>true</static>
+      <pose>-20 0 0.002 0 0 1.5708</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_y_30"><static>true</static>
+      <pose>-10 0 0.002 0 0 1.5708</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_y_40"><static>true</static>
+      <pose>0 0 0.002 0 0 1.5708</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.08 0.002</size></box></geometry>
+        <material><ambient>0.2 0.2 0.8 0.7</ambient><diffuse>0.2 0.2 0.8 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_y_50"><static>true</static>
+      <pose>10 0 0.002 0 0 1.5708</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_y_60"><static>true</static>
+      <pose>20 0 0.002 0 0 1.5708</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_y_70"><static>true</static>
+      <pose>30 0 0.002 0 0 1.5708</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="grid_y_80"><static>true</static>
+      <pose>40 0 0.002 0 0 1.5708</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>80 0.03 0.002</size></box></geometry>
+        <material><ambient>0.6 0.6 0.6 0.7</ambient><diffuse>0.6 0.6 0.6 0.7</diffuse></material>
+      </visual></link>
+    </model>
+
+
+    <model name="dir_north"><static>true</static>
+      <pose>0 38 0.01 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.0 3.0 0.02</size></box></geometry>
+        <material><ambient>0.1 0.1 0.9 0.9</ambient><diffuse>0.1 0.1 0.9 0.9</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="dir_south"><static>true</static>
+      <pose>0 -38 0.01 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.0 3.0 0.02</size></box></geometry>
+        <material><ambient>0.9 0.9 0.1 0.9</ambient><diffuse>0.9 0.9 0.1 0.9</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="dir_east"><static>true</static>
+      <pose>38 0 0.01 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.0 3.0 0.02</size></box></geometry>
+        <material><ambient>0.9 0.1 0.1 0.9</ambient><diffuse>0.9 0.1 0.1 0.9</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="dir_west"><static>true</static>
+      <pose>-38 0 0.01 0 0 0</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.0 3.0 0.02</size></box></geometry>
+        <material><ambient>0.1 0.9 0.1 0.9</ambient><diffuse>0.1 0.9 0.1 0.9</diffuse></material>
+      </visual></link>
+    </model>
+
+
+    <model name="ring_10_0"><static>true</static>
+      <pose>9.92403876506104 0.8682408883346516 0.003 0 0 1.6580627893946138</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531634 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_1"><static>true</static>
+      <pose>9.622501868990582 2.5783416049629952 0.003 0 0 1.8325957145940448</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531628 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_2"><static>true</static>
+      <pose>9.028590122851735 4.210100716628343 0.003 0 0 2.0071286397934793</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531632 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_3"><static>true</static>
+      <pose>8.160349234517083 5.713938048432696 0.003 0 0 2.1816615649929125</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531643 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_4"><static>true</static>
+      <pose>7.044160264027587 7.044160264027586 0.003 0 0 2.3561944901923444</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531632 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_5"><static>true</static>
+      <pose>5.713938048432697 8.160349234517083 0.003 0 0 2.530727415391778</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531625 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_6"><static>true</static>
+      <pose>4.210100716628345 9.028590122851735 0.003 0 0 2.7052603405912103</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531637 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_7"><static>true</static>
+      <pose>2.578341604962996 9.622501868990582 0.003 0 0 2.879793265790644</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531637 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_8"><static>true</static>
+      <pose>0.8682408883346524 9.92403876506104 0.003 0 0 3.0543261909900763</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531637 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_9"><static>true</static>
+      <pose>-0.8682408883346512 9.92403876506104 0.003 0 0 -3.0543261909900763</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531639 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_10"><static>true</static>
+      <pose>-2.578341604962994 9.622501868990582 0.003 0 0 -2.879793265790645</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531608 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_11"><static>true</static>
+      <pose>-4.210100716628341 9.028590122851735 0.003 0 0 -2.705260340591211</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531643 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_12"><static>true</static>
+      <pose>-5.713938048432696 8.160349234517083 0.003 0 0 -2.530727415391778</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531659 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_13"><static>true</static>
+      <pose>-7.044160264027586 7.044160264027587 0.003 0 0 -2.3561944901923453</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531608 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_14"><static>true</static>
+      <pose>-8.160349234517081 5.713938048432699 0.003 0 0 -2.1816615649929125</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531623 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_15"><static>true</static>
+      <pose>-9.028590122851735 4.210100716628347 0.003 0 0 -2.007128639793479</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531656 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_16"><static>true</static>
+      <pose>-9.622501868990582 2.5783416049629957 0.003 0 0 -1.8325957145940455</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531654 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_17"><static>true</static>
+      <pose>-9.92403876506104 0.8682408883346521 0.003 0 0 -1.6580627893946138</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531617 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_18"><static>true</static>
+      <pose>-9.924038765061042 -0.8682408883346495 0.003 0 0 -1.4835298641951804</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531617 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_19"><static>true</static>
+      <pose>-9.622501868990582 -2.5783416049629935 0.003 0 0 -1.3089969389957479</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531656 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_20"><static>true</static>
+      <pose>-9.028590122851735 -4.210100716628344 0.003 0 0 -1.1344640137963133</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531659 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_21"><static>true</static>
+      <pose>-8.160349234517085 -5.713938048432695 0.003 0 0 -0.9599310885968815</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.743114854953157 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_22"><static>true</static>
+      <pose>-7.044160264027589 -7.0441602640275836 0.003 0 0 -0.7853981633974491</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531663 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_23"><static>true</static>
+      <pose>-5.7139380484327 -8.160349234517081 0.003 0 0 -0.6108652381980155</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531605 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_24"><static>true</static>
+      <pose>-4.210100716628345 -9.028590122851735 0.003 0 0 -0.43633231299858294</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531712 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_25"><static>true</static>
+      <pose>-2.5783416049629944 -9.622501868990582 0.003 0 0 -0.2617993877991484</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.743114854953161 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_26"><static>true</static>
+      <pose>-0.8682408883346525 -9.92403876506104 0.003 0 0 -0.08726646259971718</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531617 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_27"><static>true</static>
+      <pose>0.868240888334649 -9.924038765061042 0.003 0 0 0.08726646259971617</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531614 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_28"><static>true</static>
+      <pose>2.578341604962995 -9.622501868990582 0.003 0 0 0.2617993877991492</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531696 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_29"><static>true</static>
+      <pose>4.210100716628341 -9.028590122851737 0.003 0 0 0.43633231299858216</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531528 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_30"><static>true</static>
+      <pose>5.713938048432693 -8.160349234517085 0.003 0 0 0.6108652381980151</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.743114854953171 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_31"><static>true</static>
+      <pose>7.044160264027585 -7.044160264027589 0.003 0 0 0.785398163397448</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531608 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_32"><static>true</static>
+      <pose>8.160349234517083 -5.713938048432697 0.003 0 0 0.9599310885968811</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531714 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_33"><static>true</static>
+      <pose>9.028590122851737 -4.210100716628341 0.003 0 0 1.1344640137963142</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531608 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_34"><static>true</static>
+      <pose>9.622501868990582 -2.5783416049629952 0.003 0 0 1.3089969389957483</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531612 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_10_35"><static>true</static>
+      <pose>9.92403876506104 -0.8682408883346532 0.003 0 0 1.4835298641951795</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>1.7431148549531617 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_0"><static>true</static>
+      <pose>19.84807753012208 1.7364817766693033 0.003 0 0 1.6580627893946138</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.486229709906327 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_1"><static>true</static>
+      <pose>19.245003737981165 5.1566832099259905 0.003 0 0 1.8325957145940448</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063255 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_2"><static>true</static>
+      <pose>18.05718024570347 8.420201433256686 0.003 0 0 2.0071286397934793</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063264 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_3"><static>true</static>
+      <pose>16.320698469034166 11.427876096865392 0.003 0 0 2.1816615649929125</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063286 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_4"><static>true</static>
+      <pose>14.088320528055174 14.088320528055172 0.003 0 0 2.3561944901923444</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063264 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_5"><static>true</static>
+      <pose>11.427876096865393 16.320698469034166 0.003 0 0 2.530727415391778</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.486229709906325 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_6"><static>true</static>
+      <pose>8.42020143325669 18.05718024570347 0.003 0 0 2.7052603405912103</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063273 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_7"><static>true</static>
+      <pose>5.156683209925992 19.245003737981165 0.003 0 0 2.879793265790644</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063273 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_8"><static>true</static>
+      <pose>1.7364817766693048 19.84807753012208 0.003 0 0 3.0543261909900763</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063273 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_9"><static>true</static>
+      <pose>-1.7364817766693024 19.84807753012208 0.003 0 0 -3.0543261909900763</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063277 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_10"><static>true</static>
+      <pose>-5.156683209925988 19.245003737981165 0.003 0 0 -2.879793265790645</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063215 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_11"><static>true</static>
+      <pose>-8.420201433256683 18.05718024570347 0.003 0 0 -2.705260340591211</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063286 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_12"><static>true</static>
+      <pose>-11.427876096865392 16.320698469034166 0.003 0 0 -2.530727415391778</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063317 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_13"><static>true</static>
+      <pose>-14.088320528055172 14.088320528055174 0.003 0 0 -2.3561944901923453</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063215 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_14"><static>true</static>
+      <pose>-16.320698469034163 11.427876096865399 0.003 0 0 -2.1816615649929125</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063246 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_15"><static>true</static>
+      <pose>-18.05718024570347 8.420201433256693 0.003 0 0 -2.007128639793479</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063313 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_16"><static>true</static>
+      <pose>-19.245003737981165 5.156683209925991 0.003 0 0 -1.8325957145940455</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.486229709906331 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_17"><static>true</static>
+      <pose>-19.84807753012208 1.7364817766693041 0.003 0 0 -1.6580627893946138</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063233 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_18"><static>true</static>
+      <pose>-19.848077530122083 -1.736481776669299 0.003 0 0 -1.4835298641951804</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063233 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_19"><static>true</static>
+      <pose>-19.245003737981165 -5.156683209925987 0.003 0 0 -1.3089969389957479</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063313 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_20"><static>true</static>
+      <pose>-18.05718024570347 -8.420201433256688 0.003 0 0 -1.1344640137963133</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063317 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_21"><static>true</static>
+      <pose>-16.32069846903417 -11.42787609686539 0.003 0 0 -0.9599310885968815</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.486229709906314 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_22"><static>true</static>
+      <pose>-14.088320528055178 -14.088320528055167 0.003 0 0 -0.7853981633974491</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063326 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_23"><static>true</static>
+      <pose>-11.4278760968654 -16.320698469034163 0.003 0 0 -0.6108652381980155</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.486229709906321 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_24"><static>true</static>
+      <pose>-8.42020143325669 -18.05718024570347 0.003 0 0 -0.43633231299858294</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063424 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_25"><static>true</static>
+      <pose>-5.156683209925989 -19.245003737981165 0.003 0 0 -0.2617993877991484</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.486229709906322 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_26"><static>true</static>
+      <pose>-1.736481776669305 -19.84807753012208 0.003 0 0 -0.08726646259971718</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063233 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_27"><static>true</static>
+      <pose>1.736481776669298 -19.848077530122083 0.003 0 0 0.08726646259971617</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.486229709906323 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_28"><static>true</static>
+      <pose>5.15668320992599 -19.245003737981165 0.003 0 0 0.2617993877991492</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063393 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_29"><static>true</static>
+      <pose>8.420201433256683 -18.057180245703474 0.003 0 0 0.43633231299858216</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063055 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_30"><static>true</static>
+      <pose>11.427876096865386 -16.32069846903417 0.003 0 0 0.6108652381980151</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.486229709906342 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_31"><static>true</static>
+      <pose>14.08832052805517 -14.088320528055178 0.003 0 0 0.785398163397448</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063215 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_32"><static>true</static>
+      <pose>16.320698469034166 -11.427876096865393 0.003 0 0 0.9599310885968811</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.486229709906343 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_33"><static>true</static>
+      <pose>18.057180245703474 -8.420201433256683 0.003 0 0 1.1344640137963142</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063215 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_34"><static>true</static>
+      <pose>19.245003737981165 -5.1566832099259905 0.003 0 0 1.3089969389957483</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063224 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_20_35"><static>true</static>
+      <pose>19.84807753012208 -1.7364817766693064 0.003 0 0 1.4835298641951795</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>3.4862297099063233 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_0"><static>true</static>
+      <pose>29.77211629518312 2.6047226650039548 0.003 0 0 1.658062789394613</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859489 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_1"><static>true</static>
+      <pose>28.867505606971747 7.735024814888986 0.003 0 0 1.832595714594046</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859491 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_2"><static>true</static>
+      <pose>27.085770368555206 12.63030214988503 0.003 0 0 2.007128639793479</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859488 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_3"><static>true</static>
+      <pose>24.481047703551248 17.14181414529809 0.003 0 0 2.1816615649929125</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859491 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_4"><static>true</static>
+      <pose>21.13248079208276 21.13248079208276 0.003 0 0 2.3561944901923444</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859489 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_5"><static>true</static>
+      <pose>17.141814145298092 24.481047703551248 0.003 0 0 2.5307274153917776</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859487 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_6"><static>true</static>
+      <pose>12.630302149885035 27.085770368555202 0.003 0 0 2.705260340591211</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.22934456485949 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_7"><static>true</static>
+      <pose>7.735024814888989 28.867505606971747 0.003 0 0 2.879793265790643</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859493 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_8"><static>true</static>
+      <pose>2.604722665003957 29.77211629518312 0.003 0 0 3.0543261909900767</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.22934456485949 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_9"><static>true</static>
+      <pose>-2.604722665003954 29.77211629518312 0.003 0 0 -3.0543261909900767</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859491 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_10"><static>true</static>
+      <pose>-7.735024814888982 28.867505606971747 0.003 0 0 -2.8797932657906435</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859485 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_11"><static>true</static>
+      <pose>-12.630302149885024 27.085770368555206 0.003 0 0 -2.705260340591211</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.22934456485949 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_12"><static>true</static>
+      <pose>-17.141814145298085 24.481047703551248 0.003 0 0 -2.530727415391778</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859498 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_13"><static>true</static>
+      <pose>-21.13248079208276 21.13248079208276 0.003 0 0 -2.356194490192345</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859482 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_14"><static>true</static>
+      <pose>-24.481047703551244 17.1418141452981 0.003 0 0 -2.1816615649929125</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859485 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_15"><static>true</static>
+      <pose>-27.085770368555202 12.630302149885038 0.003 0 0 -2.007128639793479</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859498 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_16"><static>true</static>
+      <pose>-28.867505606971747 7.7350248148889875 0.003 0 0 -1.8325957145940464</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859496 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_17"><static>true</static>
+      <pose>-29.77211629518312 2.604722665003956 0.003 0 0 -1.6580627893946132</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859485 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_18"><static>true</static>
+      <pose>-29.77211629518312 -2.6047226650039486 0.003 0 0 -1.4835298641951802</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859484 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_19"><static>true</static>
+      <pose>-28.867505606971747 -7.73502481488898 0.003 0 0 -1.3089969389957476</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859498 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_20"><static>true</static>
+      <pose>-27.085770368555202 -12.630302149885033 0.003 0 0 -1.134464013796314</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859496 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_21"><static>true</static>
+      <pose>-24.481047703551255 -17.141814145298085 0.003 0 0 -0.9599310885968811</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.22934456485947 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_22"><static>true</static>
+      <pose>-21.132480792082767 -21.132480792082752 0.003 0 0 -0.7853981633974488</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859499 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_23"><static>true</static>
+      <pose>-17.1418141452981 -24.481047703551244 0.003 0 0 -0.6108652381980164</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859482 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_24"><static>true</static>
+      <pose>-12.630302149885036 -27.085770368555202 0.003 0 0 -0.436332312998582</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859511 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_25"><static>true</static>
+      <pose>-7.735024814888983 -28.867505606971747 0.003 0 0 -0.26179938779914963</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.2293445648594865 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_26"><static>true</static>
+      <pose>-2.6047226650039574 -29.77211629518312 0.003 0 0 -0.08726646259971652</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859484 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_27"><static>true</static>
+      <pose>2.604722665003947 -29.77211629518312 0.003 0 0 0.08726646259971652</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859484 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_28"><static>true</static>
+      <pose>7.735024814888984 -28.867505606971747 0.003 0 0 0.2617993877991492</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.22934456485951 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_29"><static>true</static>
+      <pose>12.630302149885026 -27.08577036855521 0.003 0 0 0.43633231299858205</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.22934456485946 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_30"><static>true</static>
+      <pose>17.141814145298078 -24.481047703551255 0.003 0 0 0.6108652381980151</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.22934456485951 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_31"><static>true</static>
+      <pose>21.132480792082756 -21.132480792082767 0.003 0 0 0.7853981633974478</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859484 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_32"><static>true</static>
+      <pose>24.481047703551248 -17.14181414529809 0.003 0 0 0.9599310885968817</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859511 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_33"><static>true</static>
+      <pose>27.08577036855521 -12.630302149885024 0.003 0 0 1.1344640137963142</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859482 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_34"><static>true</static>
+      <pose>28.867505606971747 -7.735024814888985 0.003 0 0 1.308996938995747</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.2293445648594865 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+    <model name="ring_30_35"><static>true</static>
+      <pose>29.77211629518312 -2.604722665003959 0.003 0 0 1.4835298641951802</pose>
+      <link name="l"><visual name="v">
+        <geometry><box><size>5.229344564859484 0.05 0.003</size></box></geometry>
+        <material><ambient>0.9 0.9 0.9 0.5</ambient><diffuse>0.9 0.9 0.9 0.5</diffuse></material>
+      </visual></link>
+    </model>
+
+  </world>
+</sdf>

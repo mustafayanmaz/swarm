@@ -39,21 +39,22 @@ def get_formation_offsets(
     offsets = {}
 
     if formation_type == "arrow":
-        #     D0  (lider, önde)
+        # Ok Başı: Sivri ok ucu şekli
+        #     D0  (lider, en önde)
         #    / \
-        #  D1   D2  (kanatlar, arkada)
+        #  D1   D2  (kanatlar, arkada dar açıyla)
         if n >= 1:
-            offsets[agent_ids[0]] = (distance * 0.5, 0.0)
+            offsets[agent_ids[0]] = (distance * 0.7, 0.0)
         if n >= 2:
-            offsets[agent_ids[1]] = (-distance * 0.25, -distance * 0.5)
+            offsets[agent_ids[1]] = (-distance * 0.35, -distance * 0.4)
         if n >= 3:
-            offsets[agent_ids[2]] = (-distance * 0.25, distance * 0.5)
+            offsets[agent_ids[2]] = (-distance * 0.35, distance * 0.4)
         for i in range(3, n):
             row = (i - 1) // 2 + 1
             side = 1 if i % 2 == 0 else -1
             offsets[agent_ids[i]] = (
-                -distance * 0.25 * (row + 1),
-                side * distance * 0.5 * ((i + 1) // 2),
+                -distance * 0.35 * (row + 1),
+                side * distance * 0.4 * ((i + 1) // 2),
             )
 
     elif formation_type == "line":
@@ -63,17 +64,18 @@ def get_formation_offsets(
             offsets[aid] = (0.0, (i - center) * distance)
 
     elif formation_type == "v":
-        #   D0  (lider, önde)
-        #  / \
-        # D1   D2
+        # V Formasyonu: Lider arkada, kanatlar ileride açılır
+        # D1    D2  (kanatlar, ileride geniş açıyla)
+        #   \  /
+        #    D0   (lider, arkada)
         if n >= 1:
-            offsets[agent_ids[0]] = (distance * 0.5, 0.0)
+            offsets[agent_ids[0]] = (-distance * 0.4, 0.0)
         for i in range(1, n):
             side = -1 if i % 2 == 1 else 1
             row = (i + 1) // 2
             offsets[agent_ids[i]] = (
-                -row * distance * 0.4,
-                side * row * distance * 0.5,
+                row * distance * 0.35,
+                side * row * distance * 0.7,
             )
 
     else:
@@ -121,16 +123,17 @@ def apply_pitch_offsets(
     pitch_deg: float,
 ) -> Dict[int, float]:
     """
-    Pitch manevrası için irtifa offset hesapla.
-    Sürü merkezi sabit kalır, forward ekseninde eğim.
+    Pitch manevrası: Lateral (enlemesine) eksende eğim.
+    Şekil 4'e göre pitch ekseni = right (yan) ekseni.
+    Sürü merkezi sabit kalır.
 
     Returns:
-        {agent_id: down_offset} (pozitif = aşağı)
+        {agent_id: alt_offset} (pozitif = aşağı)
     """
     pitch_rad = math.radians(pitch_deg)
     return {
-        aid: fwd * math.sin(pitch_rad)
-        for aid, (fwd, _) in body_offsets.items()
+        aid: right * math.sin(pitch_rad)
+        for aid, (_, right) in body_offsets.items()
     }
 
 
@@ -139,14 +142,15 @@ def apply_roll_offsets(
     roll_deg: float,
 ) -> Dict[int, float]:
     """
-    Roll manevrası için irtifa offset hesapla.
-    Sürü merkezi sabit kalır, right ekseninde eğim.
+    Roll manevrası: Longitudinal (uzunlamasına) eksende eğim.
+    Şekil 4'e göre roll ekseni = forward (ileri) ekseni.
+    Sürü merkezi sabit kalır.
 
     Returns:
-        {agent_id: down_offset} (pozitif = aşağı)
+        {agent_id: alt_offset} (pozitif = aşağı)
     """
     roll_rad = math.radians(roll_deg)
     return {
-        aid: right * math.sin(roll_rad)
-        for aid, (_, right) in body_offsets.items()
+        aid: fwd * math.sin(roll_rad)
+        for aid, (fwd, _) in body_offsets.items()
     }

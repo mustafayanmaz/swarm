@@ -73,10 +73,22 @@ async def main():
     ctrl = SwarmController()
     await ctrl.connect(DRONE_PORTS, GRPC_BASE_PORT)
 
+    async def _camera_viewer(cams):
+        """Arka planda kamera görüntülerini göster (5 FPS)."""
+        import cv2
+        while True:
+            cams.show_frames()
+            await asyncio.sleep(0.2)
+
     try:
         if mode == "mission":
             from src.missions.autonomous import run_autonomous_mission
-            await run_autonomous_mission(ctrl)
+            from src.camera import SwarmCameras
+            cameras = SwarmCameras(num_drones=len(DRONE_PORTS))
+            await asyncio.sleep(2)  # İlk frame'lerin gelmesini bekle
+            viewer_task = asyncio.ensure_future(_camera_viewer(cameras))
+            await run_autonomous_mission(ctrl, cameras=cameras)
+            viewer_task.cancel()
 
         elif mode == "semi":
             from src.missions.semi_auto import run_semi_auto
