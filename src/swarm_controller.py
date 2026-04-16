@@ -25,7 +25,19 @@ from src.formations import (
     rotate_offsets,
 )
 from src.config import HOME_POSITION
-from src.incidents import IncidentLog
+from src.config import (
+    COLLISION_CHECK_ENABLED,
+    COLLISION_MIN_DISTANCE_M,
+    COLLISION_VIOLATION_ACTION,
+    FORMATION_ENVELOPE_ENABLED,
+    ARENA_NORTH_MIN_M,
+    ARENA_NORTH_MAX_M,
+    ARENA_EAST_MIN_M,
+    ARENA_EAST_MAX_M,
+    FORMATION_SAFETY_MARGIN_M,
+    ENVELOPE_VIOLATION_ACTION,
+)
+from src.incidents import IncidentCode, IncidentLog
 
 try:
     from src.config import DRONE_SPAWNS_NED
@@ -65,6 +77,10 @@ class SwarmController:
 
         # Failsafe olay kayıtları
         self.incident_log = IncidentLog()
+        self._hold_active: bool = False
+        self._abort_active: bool = False
+        self._collision_violation_active: bool = False
+        self._envelope_violation_active: bool = False
 
     def _snapshot_state(self) -> Dict[str, object]:
         """Current swarm state snapshot for incident records."""
@@ -100,6 +116,178 @@ class SwarmController:
             incident.drone_id,
             incident.details,
         )
+
+    @property
+    def abort_active(self) -> bool:
+        return self._abort_active
+
+    @property
+    def hold_active(self) -> bool:
+        return self._hold_active
+
+    def _activate_hold(self, reason: str) -> None:
+        self._hold_active = True
+        log.warning("Failsafe HOLD aktif: %s", reason)
+
+    def _activate_abort(self, reason: str) -> None:
+        self._abort_active = True
+        self._hold_active = True
+        log.error("Failsafe ABORT aktif: %s", reason)
+
+    def clear_hold(self) -> None:
+        self._hold_active = False
+
+    def _calculate_targets(
+        self,
+        formation_type: str,
+        formation_distance: float,
+        center: Tuple[float, float],
+        heading: float,
+    ) -> Dict[int, Tuple[float, float, float, float]]:
+        """Compute target positions for a candidate formation state."""
+        body_offsets = get_formation_offsets(
+            formation_type,
+            len(self.active_agents),
+            formation_distance,
+            self.active_agents,
+        )
+        ned_offsets = rotate_offsets(body_offsets, heading)
+        yaw_deg = math.degrees(heading)
+        targets: Dict[int, Tuple[float, float, float, float]] = {}
+        for aid in self.active_agents:
+            n_off, e_off = ned_offsets[aid]
+            targets[aid] = (
+                center[0] + n_off,
+                center[1] + e_off,
+                -self.altitude,
+                yaw_deg,
+            )
+        return targets
+
+    def _check_collision_for_targets(
+        self,
+        targets: Dict[int, Tuple[float, float, float, float]],
+    ) -> Tuple[bool, float, Optional[Tuple[int, int]]]:
+        """Validate minimum pairwise distance between active drones."""
+        if len(self.active_agents) < 2:
+            return True, 999.0, None
+
+        min_dist = float("inf")
+        min_pair: Optional[Tuple[int, int]] = None
+        ids = list(self.active_agents)
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                a = ids[i]
+                b = ids[j]
+                a_n, a_e = targets[a][0], targets[a][1]
+                b_n, b_e = targets[b][0], targets[b][1]
+                dist = math.hypot(a_n - b_n, a_e - b_e)
+                if dist < min_dist:
+                    min_dist = dist
+                    min_pair = (a, b)
+
+        is_ok = min_dist >= COLLISION_MIN_DISTANCE_M
+        return is_ok, min_dist, min_pair
+
+    def _formation_radius(self, formation_distance: float) -> float:
+        return formation_distance + FORMATION_SAFETY_MARGIN_M
+
+    def _check_envelope_for_center(
+        self,
+        center: Tuple[float, float],
+        formation_distance: float,
+    ) -> Tuple[bool, str]:
+        """Validate formation envelope stays inside configured arena bounds."""
+        radius = self._formation_radius(formation_distance)
+        n, e = center
+
+        if n - radius < ARENA_NORTH_MIN_M:
+            return False, "north_min"
+        if n + radius > ARENA_NORTH_MAX_M:
+            return False, "north_max"
+        if e - radius < ARENA_EAST_MIN_M:
+            return False, "east_min"
+        if e + radius > ARENA_EAST_MAX_M:
+            return False, "east_max"
+
+        return True, "ok"
+
+    def _apply_collision_violation(
+        self,
+        min_dist: float,
+        min_pair: Optional[Tuple[int, int]],
+    ) -> None:
+        pair_txt = f"{min_pair}" if min_pair else "unknown"
+        details = (
+            f"min_distance={min_dist:.2f}m threshold={COLLISION_MIN_DISTANCE_M:.2f}m "
+            f"pair={pair_txt}"
+        )
+
+        action = "hold"
+        if COLLISION_VIOLATION_ACTION == "abort":
+            action = "abort"
+            self._activate_abort("collision_min_distance")
+        else:
+            self._activate_hold("collision_min_distance")
+
+        self.record_incident(
+            code=IncidentCode.COLLISION_MIN_DISTANCE,
+            action_taken=action,
+            details=details,
+        )
+
+    def _apply_envelope_violation(self, boundary: str) -> None:
+        details = f"boundary={boundary} center={self.swarm_center}"
+        action = "hold"
+        if ENVELOPE_VIOLATION_ACTION == "abort":
+            action = "abort"
+            self._activate_abort("formation_envelope")
+        else:
+            self._activate_hold("formation_envelope")
+
+        self.record_incident(
+            code=IncidentCode.FORMATION_ENVELOPE_VIOLATION,
+            action_taken=action,
+            details=details,
+        )
+
+    def _run_collision_check(
+        self,
+        targets: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
+    ) -> bool:
+        if not COLLISION_CHECK_ENABLED:
+            return True
+        local_targets = targets or self._get_global_targets()
+        is_ok, min_dist, min_pair = self._check_collision_for_targets(local_targets)
+        if not is_ok:
+            if not self._collision_violation_active:
+                self._apply_collision_violation(min_dist, min_pair)
+            self._collision_violation_active = True
+            return False
+
+        self._collision_violation_active = False
+        return True
+
+    def _run_envelope_check(
+        self,
+        center: Optional[Tuple[float, float]] = None,
+        formation_distance: Optional[float] = None,
+    ) -> bool:
+        if not FORMATION_ENVELOPE_ENABLED:
+            return True
+
+        use_center = center if center is not None else self.swarm_center
+        use_dist = formation_distance if formation_distance is not None else self.formation_distance
+        is_ok, boundary = self._check_envelope_for_center(use_center, use_dist)
+
+        if not is_ok:
+            if not self._envelope_violation_active:
+                self._apply_envelope_violation(boundary)
+            self._envelope_violation_active = True
+            return False
+
+        self._envelope_violation_active = False
+        return True
 
     # ─── BAĞLANTI ─────────────────────────────────────────────
 
@@ -223,6 +411,10 @@ class SwarmController:
         """Arka planda 10Hz setpoint gönder (PX4 offboard timeout'u önler)."""
         while self._streaming:
             try:
+                if not self._abort_active:
+                    targets = self._get_global_targets()
+                    self._run_collision_check(targets)
+                    self._run_envelope_check()
                 await self.send_positions()
             except Exception:
                 pass
@@ -337,6 +529,18 @@ class SwarmController:
         if dist < 0.5:
             return
 
+        if self._abort_active:
+            log.error("ABORT aktif, move_to atlandı.")
+            return
+
+        if self._hold_active:
+            log.warning("HOLD aktif, move_to atlandı.")
+            return
+
+        if not self._run_envelope_check(center=target_ne):
+            log.error("Hedef envelope dışında, move_to iptal edildi: %s", target_ne)
+            return
+
         # Formasyon rotasyonu: hedefe doğru heading
         new_heading = compute_heading(start, target_ne)
         await self._rotate_heading(new_heading)
@@ -405,6 +609,33 @@ class SwarmController:
         self, formation_type: str, distance: float = None
     ):
         """Formasyon tipini değiştir."""
+        if self._abort_active:
+            log.error("ABORT aktif, formasyon değişikliği atlandı.")
+            return
+
+        if self._hold_active:
+            log.warning("HOLD aktif, formasyon değişikliği atlandı.")
+            return
+
+        next_distance = self.formation_distance if distance is None else distance
+        candidate_targets = self._calculate_targets(
+            formation_type=formation_type,
+            formation_distance=next_distance,
+            center=self.swarm_center,
+            heading=self.formation_heading,
+        )
+
+        if COLLISION_CHECK_ENABLED and not self._run_collision_check(candidate_targets):
+            log.error("Formasyon değişikliği çarpışma riskinden dolayı iptal edildi.")
+            return
+
+        if FORMATION_ENVELOPE_ENABLED and not self._run_envelope_check(
+            center=self.swarm_center,
+            formation_distance=next_distance,
+        ):
+            log.error("Formasyon değişikliği envelope ihlalinden dolayı iptal edildi.")
+            return
+
         self.formation_type = formation_type
         if distance is not None:
             self.formation_distance = distance
