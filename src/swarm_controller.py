@@ -25,6 +25,7 @@ from src.formations import (
     rotate_offsets,
 )
 from src.config import HOME_POSITION
+from src.incidents import IncidentLog
 
 try:
     from src.config import DRONE_SPAWNS_NED
@@ -61,6 +62,44 @@ class SwarmController:
         # Arka plan setpoint stream
         self._streaming: bool = False
         self._stream_task: Optional[asyncio.Task] = None
+
+        # Failsafe olay kayıtları
+        self.incident_log = IncidentLog()
+
+    def _snapshot_state(self) -> Dict[str, object]:
+        """Current swarm state snapshot for incident records."""
+        return {
+            "swarm_center": [round(self.swarm_center[0], 3), round(self.swarm_center[1], 3)],
+            "altitude": round(self.altitude, 3),
+            "active_agents": list(self.active_agents),
+            "removed_agents": list(self.removed_agents),
+            "formation_type": self.formation_type,
+            "formation_distance": round(self.formation_distance, 3),
+            "formation_heading_deg": round(math.degrees(self.formation_heading), 3),
+        }
+
+    def record_incident(
+        self,
+        code: str,
+        action_taken: str,
+        drone_id: Optional[int] = None,
+        details: str = "",
+    ) -> None:
+        """Add a standardized incident entry and mirror it to logger output."""
+        incident = self.incident_log.record(
+            code=code,
+            action_taken=action_taken,
+            drone_id=drone_id,
+            details=details,
+            swarm_state=self._snapshot_state(),
+        )
+        log.warning(
+            "[INCIDENT %s] action=%s drone=%s details=%s",
+            incident.code,
+            incident.action_taken,
+            incident.drone_id,
+            incident.details,
+        )
 
     # ─── BAĞLANTI ─────────────────────────────────────────────
 
