@@ -19,6 +19,8 @@ import asyncio
 import logging
 import sys
 import time
+import math
+from statistics import median
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -41,6 +43,7 @@ from src.config import (
     LANDING_ZONE_MIN_DETECTIONS,
     LANDING_ZONE_MIN_CONFIDENCE_PCT,
     LANDING_ZONE_MAX_MOTION_RATIO,
+    LANDING_ZONE_MAX_SPREAD_M,
 )
 from src.swarm_controller import SwarmController
 from src.camera import SwarmCameras
@@ -48,6 +51,34 @@ from src.detection import detect_qr, detect_color_zone, detect_motion_ratio
 from src.incidents import IncidentCode
 
 log = logging.getLogger("swarm")
+
+
+def _compute_zone_position(samples: list[dict]) -> tuple[tuple[float, float] | None, float, int]:
+    """Compute a robust landing zone position from confidence-ranked samples."""
+    if not samples:
+        return None, float("inf"), 0
+
+    stable = [
+        s for s in samples
+        if s["confidence"] >= LANDING_ZONE_MIN_CONFIDENCE_PCT
+        and s["motion"] <= (LANDING_ZONE_MAX_MOTION_RATIO * 1.5)
+    ]
+    if not stable:
+        stable = list(samples)
+
+    ranked = sorted(stable, key=lambda s: s["confidence"], reverse=True)
+    top = ranked[: min(len(ranked), 12)]
+
+    ns = [s["n"] for s in top]
+    es = [s["e"] for s in top]
+    pos_n = float(median(ns))
+    pos_e = float(median(es))
+
+    spread = 0.0
+    for s in top:
+        spread = max(spread, math.hypot(s["n"] - pos_n, s["e"] - pos_e))
+
+    return (pos_n, pos_e), spread, len(stable)
 
 
 def read_qr_from_camera(
@@ -250,8 +281,9 @@ async def execute_qr_mission(
             zone = detected_zones[renk]
             if (
                 zone["detections"] >= LANDING_ZONE_MIN_DETECTIONS
+                and zone["stable_detections"] >= LANDING_ZONE_MIN_DETECTIONS
                 and zone["avg_confidence"] >= LANDING_ZONE_MIN_CONFIDENCE_PCT
-                and zone["max_motion_ratio"] <= LANDING_ZONE_MAX_MOTION_RATIO
+                and zone["spread_m"] <= LANDING_ZONE_MAX_SPREAD_M
             ):
                 landing_zone = zone["position"]
                 log.info(f"  ▶ {renk} bölge KAMERA ile doğrulandı: {landing_zone}")
@@ -261,11 +293,13 @@ async def execute_qr_mission(
                     action_taken="fallback_config_zone",
                     details=(
                         f"color={renk} detections={zone['detections']} "
+                        f"stable={zone['stable_detections']} "
                         f"avg_conf={zone['avg_confidence']:.2f} "
-                        f"max_motion={zone['max_motion_ratio']:.3f}"
+                        f"spread={zone['spread_m']:.2f}m"
                     ),
                 )
                 log.warning(f"  ⚠ {renk} bölge suitability yetersiz, config fallback kullanılacak")
+                landing_zone = LANDING_ZONES.get(renk)
         else:
             landing_zone = LANDING_ZONES.get(renk)
             if landing_zone:
@@ -339,6 +373,10 @@ async def move_to_with_color_scan(ctrl, target_ne, cameras, detected_zones):
                                 "detections": 1,
                                 "avg_confidence": confidence,
                                 "max_motion_ratio": motion_ratio,
+                                "stable_detections": 1 if confidence >= LANDING_ZONE_MIN_CONFIDENCE_PCT else 0,
+                                "spread_m": 0.0,
+                                "locked": False,
+                                "samples": [{"n": zone_pos[0], "e": zone_pos[1], "confidence": confidence, "motion": motion_ratio}],
                             }
                         else:
                             zone = detected_zones[color]
@@ -347,14 +385,43 @@ async def move_to_with_color_scan(ctrl, target_ne, cameras, detected_zones):
                                 (zone["avg_confidence"] * zone["detections"]) + confidence
                             ) / det
                             zone["detections"] = det
-                            zone["position"] = zone_pos
                             zone["max_motion_ratio"] = max(zone["max_motion_ratio"], motion_ratio)
+                            zone["samples"].append(
+                                {"n": zone_pos[0], "e": zone_pos[1], "confidence": confidence, "motion": motion_ratio}
+                            )
+                            if len(zone["samples"]) > 80:
+                                zone["samples"] = zone["samples"][-80:]
+
+                            computed_pos, spread_m, stable_count = _compute_zone_position(zone["samples"])
+                            if computed_pos is not None and not zone["locked"]:
+                                zone["position"] = computed_pos
+                            zone["spread_m"] = spread_m
+                            zone["stable_detections"] = stable_count
+
+                            if (
+                                not zone["locked"]
+                                and zone["detections"] >= LANDING_ZONE_MIN_DETECTIONS
+                                and zone["stable_detections"] >= LANDING_ZONE_MIN_DETECTIONS
+                                and zone["avg_confidence"] >= LANDING_ZONE_MIN_CONFIDENCE_PCT
+                                and zone["spread_m"] <= LANDING_ZONE_MAX_SPREAD_M
+                            ):
+                                zone["locked"] = True
+
+                        if color in detected_zones and detected_zones[color].get("detections", 0) == 1:
+                            zone = detected_zones[color]
+                            computed_pos, spread_m, stable_count = _compute_zone_position(zone["samples"])
+                            if computed_pos is not None:
+                                zone["position"] = computed_pos
+                            zone["spread_m"] = spread_m
+                            zone["stable_detections"] = stable_count
 
                         zone = detected_zones[color]
                         log.info(
                             f"  🎨 KAMERA (Drone {cam_id}): {color} tespit "
-                            f"NED=({zone_pos[0]:.1f}, {zone_pos[1]:.1f}) "
-                            f"conf={confidence:.1f} det={zone['detections']} motion={motion_ratio:.3f}"
+                            f"NED=({zone['position'][0]:.1f}, {zone['position'][1]:.1f}) "
+                            f"conf={confidence:.1f} det={zone['detections']} "
+                            f"stable={zone['stable_detections']} spread={zone['spread_m']:.2f}m "
+                            f"lock={zone['locked']}"
                         )
             await asyncio.sleep(scan_interval)
 
