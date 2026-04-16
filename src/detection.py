@@ -14,10 +14,12 @@ log = logging.getLogger("swarm.detection")
 _debug_counter = 0
 
 
-def detect_qr(frame, save_debug: bool = False) -> dict | None:
+def detect_qr(frame, save_debug: bool = False, return_meta: bool = False) -> dict | tuple[dict, float, int] | None:
     """
     Frame'den QR kod oku ve JSON olarak parse et.
-    Returns: QR içeriği dict veya None
+        Returns:
+            - return_meta=False: QR içeriği dict veya None
+            - return_meta=True: (QR içeriği dict, güven skoru, yöntem_idx) veya None
     """
     global _debug_counter
     if frame is None:
@@ -59,6 +61,8 @@ def detect_qr(frame, save_debug: bool = False) -> dict | None:
     methods.append(gray)
 
     for i, img in enumerate(methods):
+        confidence = max(40.0, 100.0 - (i * 15.0))
+
         # pyzbar
         results = pyzbar_decode(img)
         for r in results:
@@ -66,6 +70,8 @@ def detect_qr(frame, save_debug: bool = False) -> dict | None:
                 data = r.data.decode("utf-8")
                 content = json.loads(data)
                 log.info(f"QR tespit edildi: qr_id={content.get('qr_id')} (pyzbar, yöntem {i})")
+                if return_meta:
+                    return (content, confidence, i)
                 return content
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 log.warning(f"QR parse hatası: {e}")
@@ -77,6 +83,8 @@ def detect_qr(frame, save_debug: bool = False) -> dict | None:
             try:
                 content = json.loads(val)
                 log.info(f"QR tespit edildi: qr_id={content.get('qr_id')} (opencv, yöntem {i})")
+                if return_meta:
+                    return (content, confidence, i)
                 return content
             except (json.JSONDecodeError, ValueError) as e:
                 log.warning(f"QR parse hatası (opencv): {e}")
@@ -84,10 +92,12 @@ def detect_qr(frame, save_debug: bool = False) -> dict | None:
     return None
 
 
-def detect_color_zone(frame) -> str | None:
+def detect_color_zone(frame, return_confidence: bool = False) -> str | tuple[str, float] | None:
     """
     Frame'de kırmızı veya mavi alan tespit et.
-    Returns: 'kirmizi', 'mavi' veya None
+        Returns:
+            - return_confidence=False: 'kirmizi', 'mavi' veya None
+            - return_confidence=True: ('kirmizi'|'mavi', confidence_pct) veya None
     """
     if frame is None:
         return None
@@ -120,13 +130,33 @@ def detect_color_zone(frame) -> str | None:
     if red_px > threshold and red_px > blue_px:
         pct = red_px / total_px * 100
         log.info(f"🔴 KIRMIZI ALAN TESPİT EDİLDİ! ({pct:.1f}% piksel, {red_px}/{total_px})")
+        if return_confidence:
+            return ("kirmizi", pct)
         return "kirmizi"
     elif blue_px > threshold and blue_px > red_px:
         pct = blue_px / total_px * 100
         log.info(f"🔵 MAVİ ALAN TESPİT EDİLDİ! ({pct:.1f}% piksel, {blue_px}/{total_px})")
+        if return_confidence:
+            return ("mavi", pct)
         return "mavi"
 
     return None
+
+
+def detect_motion_ratio(prev_frame, curr_frame) -> float:
+    """Estimate motion ratio between two frames (0..1) for landing area stability checks."""
+    if prev_frame is None or curr_frame is None:
+        return 0.0
+
+    prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+    curr_gray = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2GRAY)
+    diff = cv2.absdiff(prev_gray, curr_gray)
+    _, mask = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+    changed = cv2.countNonZero(mask)
+    total = mask.shape[0] * mask.shape[1]
+    if total <= 0:
+        return 0.0
+    return float(changed) / float(total)
 
 
 def detect_color_offset(frame, target_color: str, save_debug: bool = False, debug_tag: str = "") -> tuple[float, float] | None:

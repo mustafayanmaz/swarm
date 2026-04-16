@@ -5,6 +5,7 @@ OpenCV frame olarak döner.
 """
 import os
 import sys
+import time
 import numpy as np
 import cv2
 
@@ -35,6 +36,7 @@ class GzCamera:
         self._node = Node()
         self._frame = None
         self._new_frame = False
+        self._last_frame_time: float | None = None
 
         # PX4 SITL multi-vehicle topic formatı:
         # /world/{world}/model/{model}_{i}/link/camera_link/sensor/camera/image
@@ -74,6 +76,7 @@ class GzCamera:
             return
 
         self._new_frame = True
+        self._last_frame_time = time.monotonic()
 
     def get_frame(self):
         """Son frame'i döndür. Yoksa None."""
@@ -84,6 +87,15 @@ class GzCamera:
 
     def has_new_frame(self) -> bool:
         return self._new_frame
+
+    def frame_age_s(self) -> float:
+        """Seconds elapsed since last received frame."""
+        if self._last_frame_time is None:
+            return float("inf")
+        return max(0.0, time.monotonic() - self._last_frame_time)
+
+    def is_healthy(self, timeout_s: float) -> bool:
+        return self.frame_age_s() <= timeout_s
 
 
 class SwarmCameras:
@@ -106,6 +118,28 @@ class SwarmCameras:
     def get_all_frames(self):
         """Tüm droneların frame'lerini döndür."""
         return {did: cam.get_frame() for did, cam in self.cameras.items()}
+
+    def get_frame_age(self, drone_id: int) -> float:
+        cam = self.cameras.get(drone_id)
+        if cam is None:
+            return float("inf")
+        return cam.frame_age_s()
+
+    def is_healthy(self, drone_id: int, timeout_s: float) -> bool:
+        cam = self.cameras.get(drone_id)
+        if cam is None:
+            return False
+        return cam.is_healthy(timeout_s)
+
+    def health_snapshot(self, timeout_s: float) -> dict[int, dict[str, float | bool]]:
+        snapshot: dict[int, dict[str, float | bool]] = {}
+        for did, cam in self.cameras.items():
+            age = cam.frame_age_s()
+            snapshot[did] = {
+                "frame_age_s": age,
+                "healthy": age <= timeout_s,
+            }
+        return snapshot
 
     def show_frames(self):
         """Tüm kamera görüntülerini OpenCV pencerelerinde göster. Non-blocking."""

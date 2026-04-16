@@ -34,15 +34,25 @@ from src.config import (
     TEAM_ID,
     CRUISE_SPEED,
     NUM_DRONES,
+    CAMERA_HEALTH_ENABLED,
+    CAMERA_FRAME_TIMEOUT_S,
+    CAMERA_MIN_CONFIDENCE_PCT,
+    QR_READ_MAX_ATTEMPTS,
 )
 from src.swarm_controller import SwarmController
 from src.camera import SwarmCameras
 from src.detection import detect_qr, detect_color_zone
+from src.incidents import IncidentCode
 
 log = logging.getLogger("swarm")
 
 
-def read_qr_from_camera(cameras, timeout: float = 10.0) -> dict | None:
+def read_qr_from_camera(
+    cameras,
+    timeout: float = 10.0,
+    max_attempts: int = QR_READ_MAX_ATTEMPTS,
+    ctrl: SwarmController | None = None,
+) -> dict | None:
     """
     TÜM drone kameralarından QR kod oku.
     Sürü merkezinde olan drone QR'ın üstünde olmayabilir (formasyon offset),
@@ -50,15 +60,53 @@ def read_qr_from_camera(cameras, timeout: float = 10.0) -> dict | None:
     """
     num = cameras.num_drones
     start = time.time()
-    while time.time() - start < timeout:
+    attempts = 0
+    frame_timeout_reported = set()
+
+    while time.time() - start < timeout and attempts < max_attempts:
+        attempts += 1
         for cam_id in range(num):
+            if CAMERA_HEALTH_ENABLED and not cameras.is_healthy(cam_id, CAMERA_FRAME_TIMEOUT_S):
+                if ctrl is not None and cam_id not in frame_timeout_reported:
+                    ctrl.record_incident(
+                        code=IncidentCode.CAMERA_FRAME_TIMEOUT,
+                        action_taken="camera_skip",
+                        drone_id=cam_id,
+                        details=(
+                            f"frame_age={cameras.get_frame_age(cam_id):.2f}s "
+                            f"timeout={CAMERA_FRAME_TIMEOUT_S:.2f}s"
+                        ),
+                    )
+                    frame_timeout_reported.add(cam_id)
+                continue
+
             frame = cameras.get_frame(cam_id)
             if frame is not None:
-                content = detect_qr(frame, save_debug=(cam_id == 0))
-                if content is not None:
+                result = detect_qr(frame, save_debug=(cam_id == 0), return_meta=True)
+                if result is not None:
+                    content, confidence, _ = result
+                    if confidence < CAMERA_MIN_CONFIDENCE_PCT:
+                        if ctrl is not None:
+                            ctrl.record_incident(
+                                code=IncidentCode.CAMERA_CONFIDENCE_LOW,
+                                action_taken="qr_retry",
+                                drone_id=cam_id,
+                                details=(
+                                    f"confidence={confidence:.2f} "
+                                    f"threshold={CAMERA_MIN_CONFIDENCE_PCT:.2f}"
+                                ),
+                            )
+                        continue
                     log.info(f"    (Drone {cam_id} kamerasından okundu)")
                     return content
         time.sleep(0.1)
+
+    if ctrl is not None:
+        ctrl.record_incident(
+            code=IncidentCode.QR_READ_FAILURE,
+            action_taken="fallback_config",
+            details=f"attempts={attempts} timeout={timeout:.1f}s",
+        )
     return None
 
 
@@ -82,7 +130,12 @@ async def read_qr(qr_id: int, ctrl: SwarmController, cameras=None) -> dict:
     if cameras is not None:
         # Önce mevcut irtifadan dene (hızlı)
         log.info(f"  📷 [1/3] Mevcut irtifadan deneniyor ({mission_alt:.0f}m, 3s)...")
-        content = read_qr_from_camera(cameras, timeout=3.0)
+        content = read_qr_from_camera(
+            cameras,
+            timeout=3.0,
+            max_attempts=QR_READ_MAX_ATTEMPTS,
+            ctrl=ctrl,
+        )
         if content is not None:
             log.info(f"  ✅ QR{qr_id} KAMERA ile okundu! (irtifa: {mission_alt:.0f}m)")
             return content
@@ -100,7 +153,12 @@ async def read_qr(qr_id: int, ctrl: SwarmController, cameras=None) -> dict:
             await asyncio.sleep(1.0)
 
             log.info(f"  📷 [{step}/3] {read_alt}m'den deneniyor (5s)...")
-            content = read_qr_from_camera(cameras, timeout=5.0)
+            content = read_qr_from_camera(
+                cameras,
+                timeout=5.0,
+                max_attempts=QR_READ_MAX_ATTEMPTS,
+                ctrl=ctrl,
+            )
             if content is not None:
                 log.info(f"  ✅ QR{qr_id} KAMERA ile okundu! (irtifa: {read_alt}m)")
                 log.info(f"  📷 Görev irtifasına dönüş: {read_alt}m → {mission_alt:.0f}m")
